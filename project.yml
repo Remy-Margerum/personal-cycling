@@ -22,16 +22,32 @@ targets:
     dependencies:
       - package: RideKit
     scheme: {}   # shared scheme, so `xcodebuild -scheme BikeComputer` works in CI
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.remymargerum.bikecomputer
         TARGETED_DEVICE_FAMILY: "1"
-        CODE_SIGN_STYLE: Automatic
-        # DEVELOPMENT_TEAM: ABCDE12345   # or pick your team in Signing & Capabilities
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "0.1"
+        # The TestFlight workflow overrides this with its run number, since
+        # every upload needs a higher build number.
+        CURRENT_PROJECT_VERSION: "1"
+        # Signing lives in Config/Signing.xcconfig. Target-level settings here
+        # would override it, so don't set CODE_SIGN_STYLE or DEVELOPMENT_TEAM.
+        # XcodeGen's iOS preset sets CODE_SIGN_IDENTITY at this level, so it
+        # points at a variable the xcconfig defines.
+        CODE_SIGN_IDENTITY: $(BIKE_CODE_SIGN_IDENTITY)
     info:
       path: BikeComputer/Info.plist
       properties:
         CFBundleDisplayName: Bike Computer
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # No custom encryption (HTTPS only), so TestFlight doesn't ask the
+        # export compliance question for every build.
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIBackgroundModes: [location, bluetooth-central]

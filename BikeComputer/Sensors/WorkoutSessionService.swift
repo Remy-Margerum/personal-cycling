@@ -43,8 +43,13 @@ final class WorkoutSessionService: NSObject {
         ]
         do {
             try await healthStore.requestAuthorization(toShare: share, read: read)
+            // Read permission (heart rate) is deliberately hidden by HealthKit;
+            // only share permissions are visible.
+            let workouts = healthStore.authorizationStatus(for: HKObjectType.workoutType())
+            DebugLog.shared.log(.hr, "health permissions requested; saving workouts \(workouts.debugName)")
         } catch {
             lastError = error.localizedDescription
+            DebugLog.shared.log(.hr, "health permission request failed: \(error.localizedDescription)")
         }
     }
 
@@ -70,18 +75,30 @@ final class WorkoutSessionService: NSObject {
         heartRate = nil
         lastError = nil
 
+        DebugLog.shared.log(.hr, "workout session starting")
         session.startActivity(with: date)
         try await builder.beginCollection(at: date)
+        DebugLog.shared.log(.hr, "workout collection started")
     }
 
-    func pause() { session?.pause() }
-    func resume() { session?.resume() }
+    func pause() {
+        DebugLog.shared.log(.hr, "workout pause")
+        session?.pause()
+    }
+
+    func resume() {
+        DebugLog.shared.log(.hr, "workout resume")
+        session?.resume()
+    }
 
     /// Streams GPS points into the workout route as they arrive.
     func addRoute(_ locations: [CLLocation]) {
         guard !locations.isEmpty, let routeBuilder else { return }
         routeBuilder.insertRouteData(locations) { [weak self] _, error in
-            if let error { DispatchQueue.main.async { self?.lastError = error.localizedDescription } }
+            if let error {
+                DebugLog.shared.log(.gps, "route insert failed: \(error.localizedDescription)")
+                DispatchQueue.main.async { self?.lastError = error.localizedDescription }
+            }
         }
     }
 
@@ -93,19 +110,24 @@ final class WorkoutSessionService: NSObject {
         defer { reset() }
 
         let samples = Self.quantitySamples(for: ride)
+        DebugLog.shared.log(.hr, "saving workout: \(samples.count) power/cadence/distance samples")
         if !samples.isEmpty {
             try await builder.addSamples(samples)
         }
         session.end()
         try await builder.endCollection(at: ride.endDate)
-        if let workout = try await builder.finishWorkout(), let routeBuilder {
+        let workout = try await builder.finishWorkout()
+        DebugLog.shared.log(.hr, workout == nil ? "finishWorkout returned no workout" : "workout saved to Apple Health")
+        if let workout, let routeBuilder {
             _ = try await routeBuilder.finishRoute(with: workout, metadata: nil)
+            DebugLog.shared.log(.hr, "route saved")
         }
     }
 
     /// Ends the session without saving anything to Apple Health.
     @MainActor
     func discard() {
+        DebugLog.shared.log(.hr, "workout discarded")
         session?.end()
         builder?.discardWorkout()
         routeBuilder?.discard()
@@ -115,7 +137,8 @@ final class WorkoutSessionService: NSObject {
     /// Heart rate older than 10 s is treated as missing (AirPods out of ear,
     /// poor fit or disconnected).
     func expireStaleReadings(now: Date) {
-        if let last = lastHeartRateAt, now.timeIntervalSince(last) > 10 {
+        if let last = lastHeartRateAt, now.timeIntervalSince(last) > 10, heartRate != nil {
+            DebugLog.shared.log(.hr, "no heart rate for \(Int(now.timeIntervalSince(last))) s")
             heartRate = nil
         }
     }
@@ -159,25 +182,61 @@ extension WorkoutSessionService: HKLiveWorkoutBuilderDelegate {
     func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder, didCollectDataOf collectedTypes: Set<HKSampleType>) {
         let heartRateType = HKQuantityType(.heartRate)
         guard collectedTypes.contains(heartRateType),
-              let quantity = workoutBuilder.statistics(for: heartRateType)?.mostRecentQuantity()
+              let statistics = workoutBuilder.statistics(for: heartRateType),
+              let quantity = statistics.mostRecentQuantity()
         else { return }
         let value = Int(quantity.doubleValue(for: Self.bpm).rounded())
+        // Lag between the sample's measurement time and now: how stale the
+        // AirPods reading is when it reaches us.
+        let lag = statistics.mostRecentQuantityDateInterval().map { Date().timeIntervalSince($0.end) }
+        DebugLog.shared.log(.hr, "hr \(value) bpm, lag \(DebugFormat.fixed(lag, 1)) s")
         DispatchQueue.main.async {
             self.heartRate = value
             self.lastHeartRateAt = Date()
         }
     }
 
-    func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
+    func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {
+        if let event = workoutBuilder.workoutEvents.last {
+            DebugLog.shared.log(.hr, "workout event \(event.type.rawValue)")
+        }
+    }
 }
 
 extension WorkoutSessionService: HKWorkoutSessionDelegate {
     func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState,
                         from fromState: HKWorkoutSessionState, date: Date) {
+        DebugLog.shared.log(.hr, "session \(fromState.debugName) → \(toState.debugName)")
         DispatchQueue.main.async { self.sessionState = toState }
     }
 
     func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        DebugLog.shared.log(.hr, "session failed: \(error.localizedDescription)")
         DispatchQueue.main.async { self.lastError = error.localizedDescription }
+    }
+}
+
+private extension HKWorkoutSessionState {
+    var debugName: String {
+        switch self {
+        case .notStarted: "not started"
+        case .prepared: "prepared"
+        case .running: "running"
+        case .paused: "paused"
+        case .stopped: "stopped"
+        case .ended: "ended"
+        @unknown default: "state \(rawValue)"
+        }
+    }
+}
+
+private extension HKAuthorizationStatus {
+    var debugName: String {
+        switch self {
+        case .sharingAuthorized: "allowed"
+        case .sharingDenied: "denied"
+        case .notDetermined: "not asked yet"
+        @unknown default: "status \(rawValue)"
+        }
     }
 }

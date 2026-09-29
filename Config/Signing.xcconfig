@@ -1,0 +1,9 @@
+// Signing for the BikeComputer target only (not the RideKit package, which
+// rejects provisioning profiles). Local builds use automatic signing: pick
+// your team in Xcode. The TestFlight workflow writes Signing.local.xcconfig
+// from GitHub secrets to switch to manual App Store signing; that file is
+// gitignored and never committed.
+CODE_SIGN_STYLE = Automatic
+BIKE_CODE_SIGN_IDENTITY = Apple Development
+
+#include? "Signing.local.xcconfig"
