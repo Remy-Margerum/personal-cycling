@@ -14,7 +14,8 @@ Rides are saved on the phone as JSON and TCX files, saved to Apple Health as
 outdoor cycling workouts, and can be uploaded to Intervals.icu, which feeds
 the `/cycling` page of [remymargerum.com](https://remymargerum.com/cycling/).
 
-**Status:** scaffolded, not yet compiled for iOS or run on a phone.
+**Status:** compiles for iOS in CI (GitHub Actions, Xcode 26); not yet
+signed or run on a phone.
 See [PLAN.md](PLAN.md) for what happens next.
 
 ## Layout

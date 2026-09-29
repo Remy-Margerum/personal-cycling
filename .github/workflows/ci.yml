@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     container: swift:6.2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: swift test
         working-directory: RideKit
         run: swift test
@@ -25,7 +25,7 @@ jobs:
     name: iOS build (unsigned)
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Tools
         run: |
           brew install xcodegen xcbeautify

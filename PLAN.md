@@ -32,15 +32,14 @@ shortcut for live debugging, nothing more.
 - [ ] Delete the `claude/airpods-workout-app-integration-n41vw2` branch in
       `personalWebsite`; nothing there is needed any more.
 
-## Phase 2 — Cloud compile check (Claude)
+## Phase 2 — Cloud compile check (Claude, done)
 
-- [ ] `.github/workflows/ci.yml`: on every push,
+- [x] `.github/workflows/ci.yml`: on every push,
   - Ubuntu job runs the RideKit tests;
   - macOS job runs `xcodegen` and builds the app unsigned
     (`CODE_SIGNING_ALLOWED=NO`).
-- [ ] Fix whatever compile errors the first macOS build reports. The app
-      code has only been syntax-checked so far, never compiled against the
-      iOS SDK.
+- [x] Fix whatever compile errors the first macOS build reports. None:
+      the first build (Xcode 26.6, iOS 26 SDK) compiled cleanly.
 
 ## Phase 3 — Signing and TestFlight (Remy in the browser, Claude on the CLI, ~45 min once)
 
