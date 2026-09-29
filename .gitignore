@@ -7,3 +7,5 @@ RideKit/.build/
 .swiftpm/
 xcuserdata/
 DerivedData/
+# Written by the TestFlight workflow from GitHub secrets
+Config/Signing.local.xcconfig

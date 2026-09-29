@@ -32,37 +32,72 @@ shortcut for live debugging, nothing more.
 - [ ] Delete the `claude/airpods-workout-app-integration-n41vw2` branch in
       `personalWebsite`; nothing there is needed any more.
 
-## Phase 2 — Cloud compile check (Claude)
+## Phase 2 — Cloud compile check (Claude, done)
 
-- [ ] `.github/workflows/ci.yml`: on every push,
+- [x] `.github/workflows/ci.yml`: on every push,
   - Ubuntu job runs the RideKit tests;
   - macOS job runs `xcodegen` and builds the app unsigned
     (`CODE_SIGNING_ALLOWED=NO`).
-- [ ] Fix whatever compile errors the first macOS build reports. The app
-      code has only been syntax-checked so far, never compiled against the
-      iOS SDK.
+- [x] Fix whatever compile errors the first macOS build reports. None:
+      the first build (Xcode 26.6, iOS 26 SDK) compiled cleanly.
 
-## Phase 3 — Signing and TestFlight (Remy in the browser, Claude on the CLI, ~45 min once)
+## Phase 3 — Signing and TestFlight (Remy in the browser and on the Mac, ~45 min once)
 
-Everything here happens on developer.apple.com, appstoreconnect.apple.com
-and the GitHub repo settings. Claude gives step-by-step instructions and
-runs the command-line parts.
+Everything here happens on developer.apple.com, appstoreconnect.apple.com,
+the GitHub repo settings and Terminal on the Mac. The private key is made
+on the Mac and never leaves it except as an encrypted GitHub secret.
 
-1. **App ID.** Certificates, Identifiers & Profiles → Identifiers → new App
-   ID `com.remymargerum.bikecomputer` with the **HealthKit** capability.
-2. **Distribution certificate.** Claude generates a private key and
-   certificate signing request (`openssl`); Remy uploads the CSR under
-   Certificates → Apple Distribution, downloads the `.cer`; Claude bundles
-   it into a password-protected `.p12`.
-3. **Provisioning profile.** Profiles → App Store → the App ID above →
-   the new certificate. Download the `.mobileprovision`.
-4. **App record.** App Store Connect → Apps → new app, bundle ID from step
-   1, name "Bike Computer". Under TestFlight, add Remy as an internal
-   tester.
+1. **App ID.** Certificates, Identifiers & Profiles → Identifiers → **+** →
+   App IDs → App. Description `Bike Computer`, Bundle ID **Explicit**
+   `com.remymargerum.bikecomputer`, tick **HealthKit**, Register.
+2. **Distribution certificate.** In Terminal on the Mac:
+
+   ```sh
+   mkdir -p ~/BikeComputerSigning && cd ~/BikeComputerSigning
+   /usr/bin/openssl genrsa -out distribution.key 2048
+   /usr/bin/openssl req -new -key distribution.key -out distribution.csr \
+     -subj "/CN=Bike Computer Distribution/C=US"
+   open .
+   ```
+
+   Certificates → **+** → **Apple Distribution** → upload
+   `distribution.csr` → download the certificate into the same folder as
+   `distribution.cer`. Then:
+
+   ```sh
+   /usr/bin/openssl x509 -inform DER -in distribution.cer -out distribution.pem
+   /usr/bin/openssl pkcs12 -export -inkey distribution.key -in distribution.pem \
+     -out distribution.p12
+   ```
+
+   The last command asks for an export password: that's `P12_PASSWORD`.
+   Use `/usr/bin/openssl` (macOS's own LibreSSL), not a Homebrew OpenSSL 3,
+   whose `.p12` files macOS's keychain can't import without `-legacy`.
+   Keep `~/BikeComputerSigning` private and out of any repo folder.
+3. **Provisioning profile.** Profiles → **+** → Distribution: **App Store
+   Connect** → the App ID above → the new certificate → name it
+   `Bike Computer App Store` → download the `.mobileprovision` into
+   `~/BikeComputerSigning`.
+4. **App record.** App Store Connect → Apps → **+** → New App: iOS, the
+   bundle ID from step 1, SKU `bikecomputer`. The name must be unique across
+   the whole App Store even though the app is never published; "Bike
+   Computer" is probably taken, so use e.g. "Remy's Bike Computer" (the
+   home-screen name stays "Bike Computer").
 5. **API key.** App Store Connect → Users and Access → Integrations →
-   App Store Connect API → new key with the **App Manager** role.
-   Download the `.p8` (only offered once) and note the Key ID and Issuer ID.
-6. **GitHub secrets** (repo → Settings → Secrets and variables → Actions):
+   App Store Connect API (first time: Request Access) → Team Keys → **+**,
+   name `GitHub Actions`, role **App Manager**. Download the `.p8` (only
+   offered once) and note the Key ID and the Issuer ID.
+6. **GitHub secrets** (repo → Settings → Secrets and variables → Actions →
+   New repository secret). On the Mac, `pbcopy` puts each value on the
+   clipboard, ready to paste:
+
+   ```sh
+   cd ~/BikeComputerSigning
+   base64 -i distribution.p12 | pbcopy                # BUILD_CERTIFICATE_BASE64
+   base64 -i *.mobileprovision | pbcopy               # PROVISIONING_PROFILE_BASE64
+   pbcopy < ~/Downloads/AuthKey_*.p8                  # ASC_KEY_P8
+   ```
+
 
    | Secret | Contents |
    |---|---|
@@ -74,19 +109,29 @@ runs the command-line parts.
    | `ASC_ISSUER_ID` | Issuer ID from step 5 |
    | `ASC_KEY_P8` | contents of the `.p8` file |
 
-7. **Workflow.** Claude adds `.github/workflows/testflight.yml`: on push
-   to `main` (and on demand), archive, sign with the secrets above, upload
-   with `xcrun altool` / App Store Connect API. First successful run →
-   the build appears in TestFlight on the phone within ~15 minutes.
+7. **Workflow (written; untested until the secrets exist).**
+   `.github/workflows/testflight.yml`: on push to `main` (and on demand),
+   archive, sign with the secrets above, upload with `xcrun altool` and the
+   API key. Until every secret exists, runs finish early with a notice. The
+   build number is the run number.
+8. **First upload.** GitHub → Actions → TestFlight → **Run workflow**. The
+   log prints the signing identity and the profile's App ID and expiry,
+   which is where to look if signing fails. After Apple's processing
+   (~5–15 min): App Store Connect → the app → TestFlight → Internal Testing
+   → **+** a group, add yourself, turn on automatic distribution. Then
+   install from the TestFlight app on the iPhone.
 
 Secrets never go into the repo; they live only in GitHub's encrypted
 secrets and on Remy's computer.
 
 ## Phase 4 — First hardware check (Remy with the phone, Claude on call)
 
-Before this, Claude adds a **Debug** screen to the app that logs raw
-power-meter packets, heart-rate events and GPS fixes, with a share button,
-so problems can be diagnosed from a log file.
+The app has a **Debug log** (Settings → Debug log, done): raw power-meter
+packets with their decoded fields, heart-rate samples with their lag, GPS
+accuracy and speed (no coordinates), one line per recorded second, and
+every Bluetooth, HealthKit and location state change. The share button
+sends the log files (one per day, kept 7 days; also in the Files app under
+Bike Computer → Logs).
 
 - [ ] Install from TestFlight. Grant Bluetooth, Location and Health
       permissions when asked.
@@ -94,8 +139,8 @@ so problems can be diagnosed from a log file.
       L/R balance and battery show up.
 - [ ] One AirPod Pro 3 in → Start. Heart rate appears within ~30 s.
 - [ ] Lock the phone for two minutes, unlock: heart rate and GPS kept going.
-- [ ] Anything wrong: share the debug log with Claude, get a fix, next
-      TestFlight build (~15 min per round).
+- [ ] Anything wrong: Settings → Debug log → Share, send it to Claude, get
+      a fix, next TestFlight build (~15 min per round).
 
 ## Phase 5 — Test rides and tuning (a few rides)
 

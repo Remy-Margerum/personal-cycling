@@ -14,26 +14,32 @@ Rides are saved on the phone as JSON and TCX files, saved to Apple Health as
 outdoor cycling workouts, and can be uploaded to Intervals.icu, which feeds
 the `/cycling` page of [remymargerum.com](https://remymargerum.com/cycling/).
 
-**Status:** scaffolded, not yet compiled for iOS or run on a phone.
+**Status:** compiles for iOS in CI (GitHub Actions, Xcode 26); not yet
+signed or run on a phone.
 See [PLAN.md](PLAN.md) for what happens next.
 
 ## Layout
 
 ```
   project.yml                XcodeGen spec (generates the .xcodeproj)
+  Config/Signing.xcconfig    signing for the app target (CI overrides it)
+  .github/workflows/
+    ci.yml                   every push: RideKit tests + unsigned iOS archive
+    testflight.yml           push to main: signed archive → TestFlight
   RideKit/                   Swift package, no iOS dependencies, unit-tested
     CyclingPowerMeasurement  parses 0x2A63 packets (power, balance, crank data)
     CadenceCalculator        crank revs → rpm, with counter wrap and coasting
     RideMetrics              GPS distance filter, elevation hysteresis, rolling avg
     Ride                     1 Hz samples, summary (avg/NP/max), 5 s buckets
     TCXWriter                TCX export with HR, cadence, speed and power
+    DebugFormat              debug-log lines, packet hex dumps, recent-lines ring
   BikeComputer/              the iOS app
     Sensors/PowerMeterService      CoreBluetooth: scan, pair, auto-reconnect
     Sensors/WorkoutSessionService  HealthKit: heart rate in, workout out
     Sensors/LocationService        GPS + barometer
     Recording/RideRecorder         combines them, samples at 1 Hz
-    Storage/                       ride files, Intervals.icu upload, Keychain
-    Views/                         Ride, Sensors, History, Settings screens
+    Storage/                       ride files, Intervals.icu upload, Keychain, debug log
+    Views/                         Ride, Sensors, History, Settings, Debug log screens
 ```
 
 ```
@@ -86,6 +92,9 @@ cd RideKit && swift test
 4. **After the ride.** Under **History**, you can **Export TCX** (share
    sheet, Files, Strava) or **Upload to Intervals.icu** (add your API key in
    **Settings** first). The site's hourly sync picks up uploaded rides.
+5. **Something off?** **Settings → Debug log** shows raw power-meter
+   packets, heart-rate samples, GPS accuracy and sensor events as they
+   happen. **Share** sends the log files. They contain no map coordinates.
 
 ## Things to check on the first real rides
 

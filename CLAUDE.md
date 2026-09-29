@@ -7,7 +7,8 @@ records and how, and PLAN.md for the phased plan and what's next.
   Linux. Keep anything testable there.
 - `BikeComputer/` is the iOS app. It can't be compiled on Linux (no iOS
   SDK); `swiftc -parse` catches syntax errors only. Real compile checks
-  come from the macOS GitHub Actions job once Phase 2 of PLAN.md is done.
+  come from the macOS job in `.github/workflows/ci.yml`, which runs on
+  every push.
 - `project.yml` generates the Xcode project with `xcodegen`; the generated
   `.xcodeproj`, `Info.plist` and entitlements are gitignored.
 - Signing keys and API keys never go in the repo (GitHub secrets only).

@@ -206,3 +206,41 @@ final class RideSummaryAndTCXTests: XCTestCase {
         XCTAssertTrue(parser.parse(), "TCX is not well-formed XML: \(String(describing: parser.parserError))")
     }
 }
+
+final class DebugFormatTests: XCTestCase {
+    func testHex() {
+        XCTAssertEqual(DebugFormat.hex([0x23, 0x00, 0x2C, 0x01, 0xFF]), "23 00 2C 01 FF")
+        XCTAssertEqual(DebugFormat.hex([]), "")
+    }
+
+    func testDescribePowerPacket() throws {
+        let bytes: [UInt8] = [0x23, 0x00, 0x2C, 0x01, 0x64, 0x02, 0x01, 0x00, 0x04]
+        let m = try XCTUnwrap(CyclingPowerMeasurement(data: bytes))
+        XCTAssertEqual(DebugFormat.describe(m), "flags=0x0023 power=300W balance=50.0%L crank=258/1024")
+        let powerOnly = try XCTUnwrap(CyclingPowerMeasurement(data: [0x00, 0x00, 0xFA, 0x00]))
+        XCTAssertEqual(DebugFormat.describe(powerOnly), "flags=0x0000 power=250W crank=none")
+    }
+
+    func testLine() {
+        let date = Date(timeIntervalSince1970: 3_600 * 14 + 60 * 3 + 7.25)
+        let utc = TimeZone(identifier: "UTC")!
+        XCTAssertEqual(DebugFormat.line(date: date, category: "power", message: "hi", timeZone: utc),
+                       "14:03:07.250 [power] hi")
+    }
+
+    func testFixed() {
+        XCTAssertEqual(DebugFormat.fixed(5.216, 2), "5.22")
+        XCTAssertEqual(DebugFormat.fixed(nil, 1), "--")
+        XCTAssertEqual(DebugFormat.fixed(.nan, 1), "--")
+    }
+
+    func testLogRingKeepsNewestLines() {
+        var ring = LogRing(capacity: 4)
+        for i in 1...20 { ring.append("\(i)") }
+        XCTAssertEqual(ring.lines, ["17", "18", "19", "20"])
+        ring.append("21")
+        XCTAssertEqual(ring.lines, ["18", "19", "20", "21"])
+        ring.removeAll()
+        XCTAssertEqual(ring.lines, [])
+    }
+}

@@ -53,6 +53,7 @@ final class RideRecorder {
         } catch {
             // Keep recording without HealthKit (no heart rate) rather than not at all.
             lastError = "Apple Health workout didn't start: \(error.localizedDescription)"
+            DebugLog.shared.log(.ride, lastError ?? "")
         }
         startDate = now
         movingTime = 0
@@ -64,6 +65,7 @@ final class RideRecorder {
         elevationAccumulator = ElevationGainAccumulator(threshold: usingBarometer ? 1 : 4)
         location.start()
         location.startAltitudeTracking()
+        DebugLog.shared.log(.ride, "start, elevation from \(usingBarometer ? "barometer" : "GPS altitude")")
         state = .recording
         lastTick = now
         startTimer()
@@ -73,6 +75,7 @@ final class RideRecorder {
         guard state == .recording else { return }
         updateMovingTime(now: Date())
         state = .paused
+        DebugLog.shared.log(.ride, "pause")
         workout.pause()
     }
 
@@ -81,6 +84,7 @@ final class RideRecorder {
         distanceAccumulator.breakSegment()
         lastTick = Date()
         state = .recording
+        DebugLog.shared.log(.ride, "resume")
         workout.resume()
     }
 
@@ -94,15 +98,19 @@ final class RideRecorder {
 
         let ride = Ride(startDate: startDate, endDate: Date(), movingTime: movingTime,
                         elevationGain: elevationGain, samples: samples)
+        DebugLog.shared.log(.ride, "finish: \(samples.count) samples, \(DebugFormat.fixed(distance, 0)) m, "
+            + "\(Int(movingTime)) s moving, \(DebugFormat.fixed(elevationGain, 0)) m climbed")
         do {
             try store.save(ride)
         } catch {
             lastError = "Couldn't save ride: \(error.localizedDescription)"
+            DebugLog.shared.log(.ride, lastError ?? "")
         }
         do {
             try await workout.finish(ride: ride)
         } catch {
             lastError = "Saved locally, but Apple Health save failed: \(error.localizedDescription)"
+            DebugLog.shared.log(.ride, lastError ?? "")
         }
         state = .idle
         self.startDate = nil
@@ -110,6 +118,7 @@ final class RideRecorder {
 
     @MainActor
     func discard() {
+        DebugLog.shared.log(.ride, "discard")
         stopTimer()
         location.stopAltitudeTracking()
         workout.discard()
@@ -147,7 +156,7 @@ final class RideRecorder {
 
         let loc = location.latestLocation
         let fresh = loc.map { now.timeIntervalSince($0.timestamp) < 5 } ?? false
-        samples.append(RideSample(
+        let sample = RideSample(
             timestamp: now,
             latitude: fresh ? loc?.coordinate.latitude : nil,
             longitude: fresh ? loc?.coordinate.longitude : nil,
@@ -156,7 +165,13 @@ final class RideRecorder {
             speed: fresh ? speed : nil,
             heartRate: workout.heartRate,
             power: power.power,
-            cadence: power.cadence.map { Int($0.rounded()) }))
+            cadence: power.cadence.map { Int($0.rounded()) })
+        samples.append(sample)
+        DebugLog.shared.log(.ride, "sample #\(samples.count) power \(sample.power.map(String.init) ?? "--")"
+            + " cadence \(sample.cadence.map(String.init) ?? "--") hr \(sample.heartRate.map(String.init) ?? "--")"
+            + " speed \(DebugFormat.fixed(sample.speed, 2)) dist \(DebugFormat.fixed(distance, 1))"
+            + " gps \(fresh ? "fresh" : "stale") alt \(DebugFormat.fixed(sample.altitude, 1))"
+            + " rel \(DebugFormat.fixed(location.relativeAltitude, 2)) gain \(DebugFormat.fixed(elevationGain, 1))")
     }
 
     private func updateMovingTime(now: Date) {
@@ -167,7 +182,9 @@ final class RideRecorder {
     private func handle(_ locations: [CLLocation]) {
         guard state == .recording else { return }
         for location in locations {
-            distanceAccumulator.add(location.fix)
+            if !distanceAccumulator.add(location.fix) {
+                DebugLog.shared.log(.ride, "distance filter rejected fix ±\(DebugFormat.fixed(location.horizontalAccuracy, 1)) m")
+            }
         }
         distance = distanceAccumulator.total
         workout.addRoute(locations.filter { $0.horizontalAccuracy <= 20 })
