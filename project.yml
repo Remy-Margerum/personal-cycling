@@ -21,6 +21,7 @@ targets:
       - path: BikeComputer
     dependencies:
       - package: RideKit
+    scheme: {}   # shared scheme, so `xcodebuild -scheme BikeComputer` works in CI
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.remymargerum.bikecomputer
