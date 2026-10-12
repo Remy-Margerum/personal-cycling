@@ -13,7 +13,7 @@ struct BikeComputerApp: App {
         let info = Bundle.main.infoDictionary ?? [:]
         let version = info["CFBundleShortVersionString"] as? String ?? "?"
         let build = info["CFBundleVersion"] as? String ?? "?"
-        DebugLog.shared.log(.app, "launch: Bike Computer \(version) (\(build)), "
+        DebugLog.shared.log(.app, "launch: Raggio \(version) (\(build)), "
             + "\(Self.deviceModel), iOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
     }
 

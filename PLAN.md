@@ -79,10 +79,10 @@ on the Mac and never leaves it except as an encrypted GitHub secret.
    `Bike Computer App Store` → download the `.mobileprovision` into
    `~/BikeComputerSigning`.
 4. **App record.** App Store Connect → Apps → **+** → New App: iOS, the
-   bundle ID from step 1, SKU `bikecomputer`. The name must be unique across
-   the whole App Store even though the app is never published; "Bike
-   Computer" is probably taken, so use e.g. "Remy's Bike Computer" (the
-   home-screen name stays "Bike Computer").
+   bundle ID from step 1, SKU `bikecomputer`, name **Raggio**. (The name
+   must be unique across the whole App Store even though the app is never
+   published. The home-screen name comes from `CFBundleDisplayName` in
+   `project.yml`.)
 5. **API key.** App Store Connect → Users and Access → Integrations →
    App Store Connect API (first time: Request Access) → Team Keys → **+**,
    name `GitHub Actions`, role **App Manager**. Download the `.p8` (only
@@ -131,7 +131,7 @@ packets with their decoded fields, heart-rate samples with their lag, GPS
 accuracy and speed (no coordinates), one line per recorded second, and
 every Bluetooth, HealthKit and location state change. The share button
 sends the log files (one per day, kept 7 days; also in the Files app under
-Bike Computer → Logs).
+Raggio → Logs).
 
 - [ ] Install from TestFlight. Grant Bluetooth, Location and Health
       permissions when asked.

@@ -42,7 +42,7 @@ targets:
     info:
       path: BikeComputer/Info.plist
       properties:
-        CFBundleDisplayName: Bike Computer
+        CFBundleDisplayName: Raggio
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # No custom encryption (HTTPS only), so TestFlight doesn't ask the

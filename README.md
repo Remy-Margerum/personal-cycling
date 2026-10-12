@@ -1,6 +1,7 @@
-# Bike Computer (iOS)
+# Raggio (iOS)
 
-A personal cycling app for iPhone. It records:
+Raggio (Italian for "spoke") is a personal cycling app for iPhone. In code
+the app target is still called `BikeComputer`. It records:
 
 | Data | Source | How |
 |---|---|---|
