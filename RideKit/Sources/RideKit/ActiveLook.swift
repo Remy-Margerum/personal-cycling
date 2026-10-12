@@ -262,11 +262,11 @@ public enum GlassesDashboard {
 
     /// Each field and the text to draw in it, in drawing order.
     public static func fields(_ m: GlassesMetrics) -> [(field: Field, text: String)] {
-        let speed = m.speed.map { m.metric ? $0 * 3.6 : $0 * 2.236936 }
+        let speedInUnits = m.speed.map { m.metric ? $0 * 3.6 : $0 * 2.236936 }
         return [
             (power, aligned(whole(m.power3s))),
             (heartRate, aligned(whole(m.heartRate.map(Double.init)))),
-            (speed, aligned(speed.map { String(format: "%.1f", min($0, 99.9)) } ?? "--")),
+            (speed, aligned(speedInUnits.map { String(format: "%.1f", min($0, 99.9)) } ?? "--")),
             (cadence, aligned(whole(m.cadence))),
         ]
     }
