@@ -40,6 +40,8 @@ struct SensorsView: View {
                     Text("Favero Assioma: spin the cranks to wake the pedals before scanning. If a head unit is also connected to them over Bluetooth, pair that one over ANT+ instead so the pedals have a free Bluetooth connection for the phone.")
                 }
 
+                GlassesSection(glasses: recorder.glasses)
+
                 Section {
                     LabeledContent("Heart rate", value: recorder.workout.heartRate.map { "\($0) bpm" } ?? "Not receiving")
                 } header: {
@@ -50,7 +52,51 @@ struct SensorsView: View {
             }
             .navigationTitle("Sensors")
             .toolbar { Button("Done") { dismiss() } }
-            .onDisappear { power.stopScan() }
+            .onDisappear {
+                power.stopScan()
+                recorder.glasses.stopScan()
+            }
+        }
+    }
+}
+
+/// Pair ActiveLook glasses (ENGO 2 and others).
+private struct GlassesSection: View {
+    let glasses: GlassesService
+
+    var body: some View {
+        Section {
+            if glasses.state == .connected {
+                LabeledContent(glasses.connectedName ?? "Glasses") {
+                    Text(glasses.batteryLevel.map { "Battery \($0)%" } ?? "Connected")
+                }
+                if let firmware = glasses.firmware {
+                    LabeledContent("Firmware", value: firmware)
+                }
+                if let problem = glasses.problem {
+                    Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                }
+                Button("Forget glasses", role: .destructive) { glasses.forget() }
+            } else if glasses.state == .connecting {
+                Label("Waiting for glasses — switch them on", systemImage: "hourglass")
+                Button("Forget glasses", role: .destructive) { glasses.forget() }
+            } else {
+                ForEach(glasses.discovered) { device in
+                    Button {
+                        glasses.connect(to: device.id)
+                    } label: {
+                        LabeledContent(device.name, value: "\(device.rssi) dBm")
+                    }
+                }
+                Button(glasses.state == .scanning ? "Scanning…" : "Scan for glasses") {
+                    glasses.startScan()
+                }
+                .disabled(glasses.state == .scanning || glasses.state == .poweredOff)
+            }
+        } header: {
+            Text("ActiveLook glasses")
+        } footer: {
+            Text("Shows power, heart rate, speed and cadence on ENGO and other ActiveLook glasses. Glasses connect to one phone or head unit at a time: disconnect them from the ENGO app or your head unit first.")
         }
     }
 }

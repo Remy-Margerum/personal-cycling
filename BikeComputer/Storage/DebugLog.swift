@@ -2,17 +2,17 @@ import Foundation
 import RideKit
 
 /// Diagnostic log for the first hardware rides: raw power-meter packets,
-/// heart-rate samples, GPS fixes and every connection or session state
-/// change. Lines go to one file per day in Documents/Logs (shareable from
-/// Settings → Debug log, and visible in the Files app) and the latest ones
-/// stay in memory for the on-screen view.
+/// heart-rate samples, GPS fixes, glasses traffic and every connection or
+/// session state change. Lines go to one file per day in Documents/Logs
+/// (shareable from Settings → Debug log, and visible in the Files app) and
+/// the latest ones stay in memory for the on-screen view.
 ///
 /// GPS lines carry accuracy, speed and step distance but no coordinates, so
 /// a shared log doesn't reveal where you ride.
 final class DebugLog: @unchecked Sendable {
     static let shared = DebugLog()
 
-    enum Category: String { case app, power, hr, gps, ride }
+    enum Category: String { case app, power, hr, gps, ride, glasses }
 
     let folder: URL
     private let queue = DispatchQueue(label: "DebugLog")

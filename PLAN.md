@@ -163,6 +163,9 @@ Raggio → Logs).
       L/R balance and battery show up.
 - [ ] One AirPod Pro 3 in → Start. Heart rate appears within ~30 s.
 - [ ] Lock the phone for two minutes, unlock: heart rate and GPS kept going.
+- [ ] ActiveLook glasses on, ENGO app closed → Sensors → Scan for glasses →
+      pick them. Power and heart rate on two big lines, speed and cadence
+      below, updating every second; still updating with the phone locked.
 - [ ] Anything wrong: Settings → Debug log → Share, send it to Claude, get
       a fix, next TestFlight build (~15 min per round).
 

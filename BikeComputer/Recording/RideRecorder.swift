@@ -12,6 +12,7 @@ final class RideRecorder {
     let power: PowerMeterService
     let workout: WorkoutSessionService
     let location: LocationService
+    let glasses: GlassesService
     let store: RideStore
 
     private(set) var state: State = .idle
@@ -34,12 +35,21 @@ final class RideRecorder {
     @ObservationIgnored private var elevationAccumulator = ElevationGainAccumulator()
     @ObservationIgnored private var usingBarometer = false
 
-    init(power: PowerMeterService, workout: WorkoutSessionService, location: LocationService, store: RideStore) {
+    init(power: PowerMeterService, workout: WorkoutSessionService, location: LocationService,
+         glasses: GlassesService, store: RideStore) {
         self.power = power
         self.workout = workout
         self.location = location
+        self.glasses = glasses
         self.store = store
         location.onLocations = { [weak self] locations in self?.handle(locations) }
+        glasses.metrics = { [weak self] in self?.glassesMetrics ?? GlassesMetrics() }
+    }
+
+    /// The live numbers for the glasses, the same as the Ride screen's.
+    var glassesMetrics: GlassesMetrics {
+        GlassesMetrics(power3s: power.power3s, heartRate: workout.heartRate, speed: speed,
+                       cadence: power.cadence, metric: UserDefaults.standard.bool(forKey: "useMetric"))
     }
 
     // MARK: Lifecycle

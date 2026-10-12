@@ -56,7 +56,7 @@ targets:
         NSHealthShareUsageDescription: Reads heart rate from your AirPods during rides.
         NSHealthUpdateUsageDescription: Saves rides to Apple Health as cycling workouts with route, power, cadence and distance.
         NSLocationWhenInUseUsageDescription: Records your route, speed and distance while you ride.
-        NSBluetoothAlwaysUsageDescription: Connects to your power meter pedals for power and cadence.
+        NSBluetoothAlwaysUsageDescription: Connects to your power meter pedals for power and cadence, and to ActiveLook glasses to show your numbers.
         NSMotionUsageDescription: Uses the barometer to measure elevation gain.
     entitlements:
       path: BikeComputer/BikeComputer.entitlements

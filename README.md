@@ -11,6 +11,9 @@ the app target is still called `BikeComputer`. It records:
 | Speed, distance, route | iPhone GPS | CoreLocation, filtered for accuracy and jitter |
 | Altitude, elevation gain | iPhone barometer | CoreMotion `CMAltimeter` (falls back to GPS altitude) |
 
+Live power, heart rate, speed and cadence can also be shown on **ActiveLook
+head-up display glasses** (ENGO 2 and others), over Bluetooth.
+
 Rides are saved on the phone as JSON and TCX files, saved to Apple Health as
 outdoor cycling workouts, and can be uploaded to Intervals.icu, which feeds
 the `/cycling` page of [remymargerum.com](https://remymargerum.com/cycling/).
@@ -34,10 +37,13 @@ See [PLAN.md](PLAN.md) for what happens next.
     Ride                     1 Hz samples, summary (avg/NP/max), 5 s buckets
     TCXWriter                TCX export with HR, cadence, speed and power
     DebugFormat              debug-log lines, packet hex dumps, recent-lines ring
+    ActiveLook               glasses protocol (commands, responses, send queue)
+                             and the 4-field dashboard on built-in layouts
   BikeComputer/              the iOS app
     Sensors/PowerMeterService      CoreBluetooth: scan, pair, auto-reconnect
     Sensors/WorkoutSessionService  HealthKit: heart rate in, workout out
     Sensors/LocationService        GPS + barometer
+    Sensors/GlassesService         ActiveLook glasses: pair, reconnect, 1 Hz dashboard
     Recording/RideRecorder         combines them, samples at 1 Hz
     Storage/                       ride files, Intervals.icu upload, Keychain, debug log
     Views/                         Ride, Sensors, History, Settings, Debug log screens
@@ -88,12 +94,16 @@ cd RideKit && swift test
    session is running. The first ride asks for Health permissions.
    California Vehicle Code 27400 bans earbuds in *both* ears while cycling,
    and one bud is enough for heart rate.
-3. **Ride.** The screen stays on while recording. Pause and resume are
+3. **Glasses (optional).** Switch on the ActiveLook glasses, make sure the
+   ENGO app or a head unit isn't connected to them, then **Sensors → Scan
+   for glasses** and choose them. They show 3 s power and heart rate on two
+   big lines, with speed and cadence below, and reconnect on their own.
+4. **Ride.** The screen stays on while recording. Pause and resume are
    manual. **Finish** lets you save or discard the ride.
-4. **After the ride.** Under **History**, you can **Export TCX** (share
+5. **After the ride.** Under **History**, you can **Export TCX** (share
    sheet, Files, Strava) or **Upload to Intervals.icu** (add your API key in
    **Settings** first). The site's hourly sync picks up uploaded rides.
-5. **Something off?** **Settings → Debug log** shows raw power-meter
+6. **Something off?** **Settings → Debug log** shows raw power-meter
    packets, heart-rate samples, GPS accuracy and sensor events as they
    happen. **Share** sends the log files. They contain no map coordinates.
 
