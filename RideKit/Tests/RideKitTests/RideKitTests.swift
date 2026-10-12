@@ -325,6 +325,12 @@ final class ActiveLookTests: XCTestCase {
         XCTAssertTrue(ActiveLook.isActiveLook(manufacturerData: [0xFA, 0xDA, 0x08, 0xF2]))
         XCTAssertFalse(ActiveLook.isActiveLook(manufacturerData: [0x4C, 0x00, 0x02, 0x15]))
         XCTAssertFalse(ActiveLook.isActiveLook(manufacturerData: [0x08, 0xF2]))
+        // Without the marker, known names still match, in any case.
+        XCTAssertTrue(ActiveLook.isActiveLook(manufacturerData: [], name: "engo3 123456"))
+        XCTAssertTrue(ActiveLook.isActiveLook(manufacturerData: [], name: "ENGO 2 004321"))
+        XCTAssertTrue(ActiveLook.isActiveLook(manufacturerData: [], name: "A.LooK  000128"))
+        XCTAssertFalse(ActiveLook.isActiveLook(manufacturerData: [], name: "Wahoo TICKR"))
+        XCTAssertFalse(ActiveLook.isActiveLook(manufacturerData: [], name: nil))
     }
 
     func testQueueSendsOneWriteAtATimeAndChunks() {

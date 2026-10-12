@@ -12,7 +12,7 @@ the app target is still called `BikeComputer`. It records:
 | Altitude, elevation gain | iPhone barometer | CoreMotion `CMAltimeter` (falls back to GPS altitude) |
 
 Live power, heart rate, speed and cadence can also be shown on **ActiveLook
-head-up display glasses** (ENGO 2 and others), over Bluetooth.
+head-up display glasses** (ENGO 2, ENGO 3 and others), over Bluetooth.
 
 Rides are saved on the phone as JSON and TCX files, saved to Apple Health as
 outdoor cycling workouts, and can be uploaded to Intervals.icu, which feeds

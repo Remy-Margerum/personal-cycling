@@ -16,16 +16,18 @@ public enum ActiveLook {
     public static let rxCharacteristic = "0783B03E-8535-B5A0-7140-A304D2495CBA"
     /// Notify: a tap on the glasses' touch sensor.
     public static let touchCharacteristic = "0783B03E-8535-B5A0-7140-A304D2495CBC"
-    /// The firmware-update service UUID, the only one in the advertisement;
-    /// used as the scan filter.
+    /// The firmware-update service UUID, the only one in the advertisement.
     public static let advertisedService = "FEF5"
     /// The built-in configuration holding the default fonts, icons and layouts.
     public static let defaultConfiguration = "ALooK"
 
-    /// True for advertisement manufacturer data from ActiveLook glasses: the
-    /// customer's company ID followed by the ActiveLook marker 0x08F2.
-    public static func isActiveLook(manufacturerData: [UInt8]) -> Bool {
-        manufacturerData.count >= 4 && Array(manufacturerData.suffix(2)) == [0x08, 0xF2]
+    /// True for an advertisement from ActiveLook glasses: manufacturer data
+    /// ending in the ActiveLook marker 0x08F2 (after the brand's company ID),
+    /// or failing that a known name ("ENGO 2…", "engo3…", "A.Look…").
+    public static func isActiveLook(manufacturerData: [UInt8], name: String? = nil) -> Bool {
+        if manufacturerData.count >= 4 && Array(manufacturerData.suffix(2)) == [0x08, 0xF2] { return true }
+        let lowercased = name?.lowercased() ?? ""
+        return lowercased.hasPrefix("engo") || lowercased.hasPrefix("a.look")
     }
 
     // MARK: Commands

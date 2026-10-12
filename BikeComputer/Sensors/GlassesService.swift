@@ -34,6 +34,7 @@ final class GlassesService: NSObject {
     @ObservationIgnored private var central: CBCentralManager!
     @ObservationIgnored private var peripheral: CBPeripheral?
     @ObservationIgnored private var seen: [UUID: CBPeripheral] = [:]
+    @ObservationIgnored private var ignored: Set<UUID> = []
     @ObservationIgnored private var rx: CBCharacteristic?
     @ObservationIgnored private var queue = ActiveLook.CommandQueue()
     @ObservationIgnored private var reader = ActiveLook.ResponseReader()
@@ -65,7 +66,10 @@ final class GlassesService: NSObject {
         discovered = []
         state = .scanning
         DebugLog.shared.log(.glasses, "scan started")
-        central.scanForPeripherals(withServices: [CBUUID(string: ActiveLook.advertisedService)])
+        // No service filter: pairing happens with the app open, and the only
+        // service the glasses advertise (FEF5, firmware update) may not be
+        // advertised by every model. Glasses are picked out in didDiscover.
+        central.scanForPeripherals(withServices: nil)
     }
 
     func stopScan() {
@@ -185,10 +189,16 @@ extension GlassesService: CBCentralManagerDelegate {
                         advertisementData: [String: Any], rssi RSSI: NSNumber) {
         let manufacturer = (advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data).map { [UInt8]($0) } ?? []
         let name = peripheral.name ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? "Glasses"
-        // The scan filter (FEF5) is a generic firmware-update service, so
-        // also require ActiveLook's manufacturer marker (or a known name).
-        guard ActiveLook.isActiveLook(manufacturerData: manufacturer)
-                || name.hasPrefix("ENGO") || name.hasPrefix("A.Look") else { return }
+        // Skipped devices that do advertise ActiveLook's firmware-update
+        // service are logged once, in case new glasses advertise differently.
+        guard ActiveLook.isActiveLook(manufacturerData: manufacturer, name: name) else {
+            let services = advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? []
+            if services.contains(CBUUID(string: ActiveLook.advertisedService)),
+               ignored.insert(peripheral.identifier).inserted {
+                DebugLog.shared.log(.glasses, "skipped \(name): manufacturer data [\(DebugFormat.hex(manufacturer))]")
+            }
+            return
+        }
         if seen[peripheral.identifier] == nil {
             DebugLog.shared.log(.glasses, "discovered \(name) \(peripheral.identifier.uuidString.prefix(8)) rssi \(RSSI.intValue)")
         }
