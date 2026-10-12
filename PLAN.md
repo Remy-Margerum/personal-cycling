@@ -133,11 +133,11 @@ on the Mac and never leaves it except as an encrypted GitHub secret.
    | `ASC_ISSUER_ID` | Issuer ID from step 5 |
    | `ASC_KEY_P8` | contents of the `.p8` file |
 
-7. **Workflow (written; untested until the secrets exist).**
+7. **Workflow (done; first upload, build 4.1, on 12 Oct 2026).**
    `.github/workflows/testflight.yml`: on push to `main` (and on demand),
-   archive, sign with the secrets above, upload with `xcrun altool` and the
-   API key. Until every secret exists, runs finish early with a notice. The
-   build number is the run number.
+   check the secrets, archive, sign with the secrets above, upload with
+   `xcrun altool` and the API key. Until every secret exists, runs finish
+   early with a notice. The build number is the run number.
 8. **First upload.** GitHub → Actions → TestFlight → **Run workflow**. The
    log prints the signing identity and the profile's App ID and expiry,
    which is where to look if signing fails. After Apple's processing
