@@ -83,7 +83,7 @@ struct RideDetailView: View {
         uploading = true
         defer { uploading = false }
         do {
-            try await IntervalsUploader.upload(tcxFile: recorder.store.tcxURL(for: ride), name: "BikeComputer ride")
+            try await IntervalsUploader.upload(tcxFile: recorder.store.tcxURL(for: ride), name: "Raggio ride")
             uploadStatus = "Uploaded. It will show on the cycling page after the next hourly sync."
         } catch {
             uploadStatus = error.localizedDescription
