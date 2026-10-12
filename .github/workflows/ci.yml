@@ -34,6 +34,8 @@ jobs:
           brew install xcodegen xcbeautify
           xcodebuild -version
           xcrun altool --version  # used by testflight.yml for the upload
+      - name: Test the TestFlight secrets check
+        run: bash .github/scripts/test-check-signing-secrets.sh
       - name: Generate project
         run: xcodegen
       # Same Release archive the TestFlight workflow makes, minus signing.
