@@ -6,6 +6,7 @@ struct BikeComputerApp: App {
         power: PowerMeterService(),
         workout: WorkoutSessionService(),
         location: LocationService(),
+        glasses: GlassesService(),
         store: RideStore())
     @Environment(\.scenePhase) private var scenePhase
 

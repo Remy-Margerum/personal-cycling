@@ -244,3 +244,143 @@ final class DebugFormatTests: XCTestCase {
         XCTAssertEqual(ring.lines, [])
     }
 }
+
+final class ActiveLookTests: XCTestCase {
+    private func hex(_ string: String) -> [UInt8] {
+        var bytes: [UInt8] = []
+        var index = string.startIndex
+        while index < string.endIndex {
+            let next = string.index(index, offsetBy: 2)
+            bytes.append(UInt8(string[index ..< next], radix: 16)!)
+            index = next
+        }
+        return bytes
+    }
+
+    func testFramesMatchTheAPIDocumentExamples() {
+        // "clear": 0xFF 0x01 0x00 0x05 0xAA
+        XCTAssertEqual(ActiveLook.Command.clear.frame, [0xFF, 0x01, 0x00, 0x05, 0xAA])
+        // "display text `hello 4` at (152;128) with direction 4, the font 2 and the color 15"
+        XCTAssertEqual(ActiveLook.Command.text(x: 152, y: 128, rotation: 4, font: 2, grey: 15, "hello 4").frame,
+                       hex("FF3700140098008004020F68656C6C6F203400AA"))
+    }
+
+    func testConfigurationAndLayoutFrames() {
+        XCTAssertEqual(ActiveLook.Command.configurationSet("ALooK").frame,
+                       [0xFF, 0xD2, 0x00, 0x0B, 0x41, 0x4C, 0x6F, 0x6F, 0x4B, 0x00, 0xAA])
+        // layout 113 at x 30, y 149, text "&$245"
+        XCTAssertEqual(ActiveLook.Command.layoutClearAndDisplay(id: 113, x: 30, y: 149, text: "&$245").frame,
+                       [0xFF, 0x6A, 0x00, 0x0F, 0x71, 0x00, 0x1E, 0x95, 0x26, 0x24, 0x32, 0x34, 0x35, 0x00, 0xAA])
+        // Non-ASCII characters are dropped.
+        XCTAssertEqual(ActiveLook.Command.configurationRead("ALooK°").frame,
+                       ActiveLook.Command.configurationRead("ALooK").frame)
+    }
+
+    func testLongFrameUsesTwoByteLength() {
+        let frame = ActiveLook.Command.text(x: 0, y: 0, rotation: 4, font: 1, grey: 15,
+                                            String(repeating: "x", count: 300)).frame
+        // 7 bytes of parameters + 300 characters + NUL + 6 bytes of framing = 314
+        XCTAssertEqual(Array(frame.prefix(5)), [0xFF, 0x37, 0x10, 0x01, 0x3A])
+        XCTAssertEqual(frame.count, 314)
+        XCTAssertEqual(frame.last, 0xAA)
+    }
+
+    func testResponseReaderReassemblesSplitFrames() {
+        var reader = ActiveLook.ResponseReader()
+        // version 4.11.2b, split across two notifications
+        let version: [UInt8] = [0xFF, 0x06, 0x00, 0x0E, 0x04, 0x0B, 0x02, 0x62, 0x1A, 0x05, 0x00, 0x00, 0x02, 0xAA]
+        let partial = reader.append(Array(version.prefix(6)))
+        XCTAssertEqual(partial, [])
+        let responses = reader.append(Array(version.dropFirst(6)))
+        XCTAssertEqual(responses.count, 1)
+        XCTAssertEqual(responses.first?.version, "4.11.2b")
+    }
+
+    func testResponseReaderHandlesJoinedFramesQueryIDsAndGarbage() {
+        var reader = ActiveLook.ResponseReader()
+        let battery: [UInt8] = [0xFF, 0x05, 0x00, 0x06, 0x57, 0xAA]                 // 87 %
+        let withQueryID: [UInt8] = [0xFF, 0x05, 0x02, 0x08, 0x01, 0x02, 0x64, 0xAA] // query id 2 bytes, 100 %
+        let responses = reader.append([0x12, 0x34] + battery + withQueryID)
+        XCTAssertEqual(responses.map(\.batteryLevel), [87, 100])
+
+        let error: [UInt8] = [0xFF, 0xE2, 0x00, 0x08, 0xD2, 0x02, 0x00, 0xAA]
+        let parsed = reader.append(error)
+        XCTAssertEqual(parsed.first?.error?.command, 0xD2)
+        XCTAssertEqual(parsed.first?.error?.code, 2)
+    }
+
+    func testConfigurationReadResponse() {
+        let response = ActiveLook.Response(id: 0xD1, data: [0, 0, 0, 11, 120, 185, 5, 0, 0])
+        XCTAssertEqual(response.configurationLayoutCount, 185)
+    }
+
+    func testControlSignals() {
+        XCTAssertEqual(ActiveLook.ControlSignal([0x01]), .resume)
+        XCTAssertEqual(ActiveLook.ControlSignal([0x02]), .pause)
+        XCTAssertEqual(ActiveLook.ControlSignal([0x03]), .error(0x03))
+        XCTAssertNil(ActiveLook.ControlSignal([]))
+    }
+
+    func testAdvertisementFilter() {
+        XCTAssertTrue(ActiveLook.isActiveLook(manufacturerData: [0xFA, 0xDA, 0x08, 0xF2]))
+        XCTAssertFalse(ActiveLook.isActiveLook(manufacturerData: [0x4C, 0x00, 0x02, 0x15]))
+        XCTAssertFalse(ActiveLook.isActiveLook(manufacturerData: [0x08, 0xF2]))
+    }
+
+    func testQueueSendsOneWriteAtATimeAndChunks() {
+        var queue = ActiveLook.CommandQueue()
+        queue.enqueue(.clear)
+        queue.enqueue(.configurationSet("ALooK"))
+        XCTAssertEqual(queue.nextWrite(maxLength: 20), [0xFF, 0x01, 0x00, 0x05, 0xAA])
+        XCTAssertNil(queue.nextWrite(maxLength: 20), "waits for the write to be acknowledged")
+        queue.acknowledged()
+        // 11-byte frame in 4-byte chunks
+        var chunks: [[UInt8]] = []
+        while let chunk = queue.nextWrite(maxLength: 4) {
+            chunks.append(chunk)
+            queue.acknowledged()
+        }
+        XCTAssertEqual(chunks.map(\.count), [4, 4, 3])
+        XCTAssertEqual(chunks.flatMap { $0 }, ActiveLook.Command.configurationSet("ALooK").frame)
+        XCTAssertTrue(queue.isEmpty)
+    }
+
+    func testQueueReplacesStaleValuesInPlace() {
+        var queue = ActiveLook.CommandQueue()
+        queue.enqueue(.layoutClearAndDisplay(id: 113, x: 30, y: 149, text: "&$200"), key: "power")
+        queue.enqueue(.layoutClearAndDisplay(id: 83, x: 30, y: 80, text: "&$140"), key: "hr")
+        queue.enqueue(.layoutClearAndDisplay(id: 113, x: 30, y: 149, text: "&$250"), key: "power")
+        var frames: [[UInt8]] = []
+        while let frame = queue.nextWrite(maxLength: 512) {
+            frames.append(frame)
+            queue.acknowledged()
+        }
+        XCTAssertEqual(frames, [
+            ActiveLook.Command.layoutClearAndDisplay(id: 113, x: 30, y: 149, text: "&$250").frame,
+            ActiveLook.Command.layoutClearAndDisplay(id: 83, x: 30, y: 80, text: "&$140").frame,
+        ])
+    }
+
+    func testAlignmentFollowsTheGhostCharacterExamples() {
+        // From the ActiveLook visual assets README.
+        XCTAssertEqual(GlassesDashboard.aligned("123"), "&$123")
+        XCTAssertEqual(GlassesDashboard.aligned("1"), "&$$$1")
+        XCTAssertEqual(GlassesDashboard.aligned("00:00"), "00:00")
+        XCTAssertEqual(GlassesDashboard.aligned("18.4"), "$18.4")
+        XCTAssertEqual(GlassesDashboard.aligned("--"), "&$$--")
+    }
+
+    func testDashboardFields() {
+        let metrics = GlassesMetrics(power3s: 244.6, heartRate: 142, speed: 8.23, cadence: 88.4, metric: false)
+        let fields = GlassesDashboard.fields(metrics)
+        XCTAssertEqual(fields.map { $0.field }, [GlassesDashboard.power, GlassesDashboard.heartRate,
+                                                 GlassesDashboard.speed, GlassesDashboard.cadence])
+        XCTAssertEqual(fields.map { $0.text }, ["&$245", "&$142", "$18.4", "&$$88"]) // 8.23 m/s = 18.4 mph
+
+        var metricUnits = metrics
+        metricUnits.metric = true
+        XCTAssertEqual(GlassesDashboard.fields(metricUnits)[2].text, "$29.6") // km/h
+
+        XCTAssertEqual(GlassesDashboard.fields(GlassesMetrics()).map { $0.text }, ["&$$--", "&$$--", "&$$--", "&$$--"])
+    }
+}

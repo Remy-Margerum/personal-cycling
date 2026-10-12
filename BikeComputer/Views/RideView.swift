@@ -114,6 +114,10 @@ struct SensorStatusBar: View {
             status("bolt.fill", powerText, recorder.power.state == .connected)
             status("heart.fill", recorder.workout.heartRate == nil ? "No HR" : "HR", recorder.workout.heartRate != nil)
             status("location.fill", gpsText, (recorder.location.latestLocation?.horizontalAccuracy ?? 999) <= 20)
+            if recorder.glasses.savedPeripheralID != nil {
+                status("eyeglasses", recorder.glasses.state == .connected ? "Glasses" : "No glasses",
+                       recorder.glasses.state == .connected && recorder.glasses.problem == nil)
+            }
         }
         .font(.footnote)
         .frame(maxWidth: .infinity)
