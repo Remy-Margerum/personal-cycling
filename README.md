@@ -39,13 +39,15 @@ See [PLAN.md](PLAN.md) for what happens next.
     DebugFormat              debug-log lines, packet hex dumps, recent-lines ring
     ActiveLook               glasses protocol (commands, responses, send queue)
                              and the 4-field dashboard on built-in layouts
+    Intervals                Intervals.icu upload request, responses, upload log
   BikeComputer/              the iOS app
     Sensors/PowerMeterService      CoreBluetooth: scan, pair, auto-reconnect
     Sensors/WorkoutSessionService  HealthKit: heart rate in, workout out
     Sensors/LocationService        GPS + barometer
     Sensors/GlassesService         ActiveLook glasses: pair, reconnect, 1 Hz dashboard
     Recording/RideRecorder         combines them, samples at 1 Hz
-    Storage/                       ride files, Intervals.icu upload, Keychain, debug log
+    Storage/IntervalsSync          automatic Intervals.icu upload with retries
+    Storage/                       ride files, Keychain, debug log
     Views/                         Ride, Sensors, History, Settings, Debug log screens
 ```
 
@@ -100,9 +102,13 @@ cd RideKit && swift test
    big lines, with speed and cadence below, and reconnect on their own.
 4. **Ride.** The screen stays on while recording. Pause and resume are
    manual. **Finish** lets you save or discard the ride.
-5. **After the ride.** Under **History**, you can **Export TCX** (share
-   sheet, Files, Strava) or **Upload to Intervals.icu** (add your API key in
-   **Settings** first). The site's hourly sync picks up uploaded rides.
+5. **After the ride.** Saved rides upload to Intervals.icu by themselves
+   (add your API key in **Settings** first; there's a switch to turn it
+   off). Without signal, the upload is retried each time you open the app.
+   Intervals.icu de-duplicates by file, so a retry never makes a second
+   activity, and the site's hourly sync picks the ride up. **History** shows
+   each ride's upload status, opens it in Intervals.icu, and can **Export
+   TCX** (share sheet, Files, Strava).
 6. **Something off?** **Settings → Debug log** shows raw power-meter
    packets, heart-rate samples, GPS accuracy and sensor events as they
    happen. **Share** sends the log files. They contain no map coordinates.

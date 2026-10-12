@@ -2,6 +2,9 @@ import XCTest
 #if canImport(FoundationXML)
 import FoundationXML // XMLParser lives here on Linux
 #endif
+#if canImport(FoundationNetworking)
+import FoundationNetworking // URLRequest lives here on Linux
+#endif
 @testable import RideKit
 
 final class CyclingPowerMeasurementTests: XCTestCase {
@@ -388,5 +391,66 @@ final class ActiveLookTests: XCTestCase {
         XCTAssertEqual(GlassesDashboard.fields(metricUnits)[2].text, "$29.6") // km/h
 
         XCTAssertEqual(GlassesDashboard.fields(GlassesMetrics()).map { $0.text }, ["&$$--", "&$$--", "&$$--", "&$$--"])
+    }
+}
+
+final class IntervalsTests: XCTestCase {
+    func testUploadRequest() throws {
+        let file = Data("<TrainingCenterDatabase/>".utf8)
+        let request = Intervals.uploadRequest(file: file, filename: "ride.tcx", name: "Raggio ride",
+                                              externalID: "ABC-123", apiKey: "secret", boundary: "B")
+        XCTAssertEqual(request.httpMethod, "POST")
+        let url = try XCTUnwrap(request.url)
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        XCTAssertEqual(url.path, "/api/v1/athlete/0/activities")
+        XCTAssertEqual(query.first { $0.name == "name" }?.value, "Raggio ride")
+        XCTAssertEqual(query.first { $0.name == "device_name" }?.value, "Raggio (iPhone)")
+        XCTAssertEqual(query.first { $0.name == "external_id" }?.value, "ABC-123")
+        // Basic auth, user "API_KEY": base64("API_KEY:secret")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic QVBJX0tFWTpzZWNyZXQ=")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "multipart/form-data; boundary=B")
+        let body = String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self)
+        XCTAssertEqual(body, "--B\r\n"
+            + "Content-Disposition: form-data; name=\"file\"; filename=\"ride.tcx\"\r\n"
+            + "Content-Type: application/vnd.garmin.tcx+xml\r\n\r\n"
+            + "<TrainingCenterDatabase/>\r\n--B--\r\n")
+    }
+
+    func testOutcomes() throws {
+        let json = Data(#"{"icu_athlete_id":"i1","id":"i1","activities":[{"icu_athlete_id":"i1","id":"i98765"}]}"#.utf8)
+        XCTAssertEqual(try Intervals.outcome(status: 201, body: json), .created(activityID: "i98765"))
+        XCTAssertEqual(try Intervals.outcome(status: 200, body: json), .duplicate(activityID: "i98765"))
+        XCTAssertEqual(try Intervals.outcome(status: 201, body: Data("not json".utf8)), .created(activityID: nil))
+        XCTAssertThrowsError(try Intervals.outcome(status: 401, body: Data())) {
+            XCTAssertEqual($0 as? Intervals.UploadError, .unauthorized)
+        }
+        XCTAssertThrowsError(try Intervals.outcome(status: 422, body: Data("bad file".utf8))) {
+            XCTAssertEqual($0 as? Intervals.UploadError, .rejected(status: 422, message: "bad file"))
+        }
+        XCTAssertThrowsError(try Intervals.outcome(status: 503, body: Data())) {
+            XCTAssertEqual($0 as? Intervals.UploadError, .unavailable(status: 503))
+        }
+        XCTAssertEqual(Intervals.activityURL("i98765")?.absoluteString, "https://intervals.icu/activities/i98765")
+    }
+
+    func testUploadLog() throws {
+        let old = UUID(), first = UUID(), second = UUID()
+        var log = Intervals.UploadLog()
+        log.queue(first)
+        log.queue(second)
+        // Rides never queued (e.g. saved before auto-upload) are left alone.
+        XCTAssertEqual(log.pending(among: [old, first, second]), [first, second])
+
+        log.record(.failed("offline"), for: first)
+        log.record(.uploaded(activityID: "i1", at: Date(timeIntervalSince1970: 0)), for: second)
+        XCTAssertEqual(log.pending(among: [old, first, second]), [first], "failed uploads are retried")
+        log.queue(second)
+        XCTAssertEqual(log[second], .uploaded(activityID: "i1", at: Date(timeIntervalSince1970: 0)),
+                       "queueing an uploaded ride doesn't upload it again")
+        log.queue(first)
+        XCTAssertEqual(log[first], .failed("offline"), "queueing keeps the last error until the retry")
+
+        let decoded = try JSONDecoder().decode(Intervals.UploadLog.self, from: JSONEncoder().encode(log))
+        XCTAssertEqual(decoded, log)
     }
 }
