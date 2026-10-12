@@ -74,6 +74,18 @@ on the Mac and never leaves it except as an encrypted GitHub secret.
    Use `/usr/bin/openssl` (macOS's own LibreSSL), not a Homebrew OpenSSL 3,
    whose `.p12` files macOS's keychain can't import without `-legacy`.
    Keep `~/BikeComputerSigning` private and out of any repo folder.
+
+   **On Windows** (how it was done in 2026), use Git Bash from Git for
+   Windows. Same commands without `/usr/bin/`, plus two differences:
+   `MSYS_NO_PATHCONV=1` in front of the `openssl req` line (otherwise Git
+   Bash turns `/CN=…` into a file path), and the `.p12` step needs
+   `winpty` for its password prompt and 3DES/SHA-1 flags so macOS can
+   import the file:
+
+   ```sh
+   winpty openssl pkcs12 -export -inkey distribution.key -in distribution.pem \
+     -out distribution.p12 -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1
+   ```
 3. **Provisioning profile.** Profiles → **+** → Distribution: **App Store
    Connect** → the App ID above → the new certificate → name it
    `Bike Computer App Store` → download the `.mobileprovision` into
@@ -98,6 +110,18 @@ on the Mac and never leaves it except as an encrypted GitHub secret.
    pbcopy < ~/Downloads/AuthKey_*.p8                  # ASC_KEY_P8
    ```
 
+   In Git Bash on Windows, `clip` does the same:
+
+   ```sh
+   cd ~/BikeComputerSigning
+   base64 -w 0 distribution.p12 | clip                # BUILD_CERTIFICATE_BASE64
+   base64 -w 0 *.mobileprovision | clip               # PROVISIONING_PROFILE_BASE64
+   cat AuthKey_*.p8 | clip                            # ASC_KEY_P8
+   ```
+
+   Only one `.mobileprovision` may be in the folder. The TestFlight
+   workflow's first step checks every secret and names any that's wrong,
+   without printing values.
 
    | Secret | Contents |
    |---|---|
