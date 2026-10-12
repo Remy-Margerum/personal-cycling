@@ -32,8 +32,10 @@ decode() {
     fail "$name isn't base64: $bad of its ${#cleaned} characters can't appear in base64, so something other than the base64 output was pasted. Copy it again with the command in PLAN.md (Phase 3, step 6)."
     return 1
   fi
-  if ! printf '%s' "$cleaned" | base64 --decode > "$file" 2> /dev/null; then
-    fail "$name looks like base64 but doesn't decode (${#cleaned} characters, so it may be cut off). Copy it again with the command in PLAN.md (Phase 3, step 6)."
+  # Padded base64 always comes in blocks of 4. macOS's decoder quietly
+  # accepts a cut-off value, so check the length explicitly.
+  if [ $((${#cleaned} % 4)) -ne 0 ] || ! printf '%s' "$cleaned" | base64 --decode > "$file" 2> /dev/null; then
+    fail "$name looks like base64 but is incomplete (${#cleaned} characters, probably cut off). Copy it again with the command in PLAN.md (Phase 3, step 6)."
     return 1
   fi
   echo "$name: OK, decodes to $(wc -c < "$file" | tr -d ' ') bytes"

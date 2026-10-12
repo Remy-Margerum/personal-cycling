@@ -69,7 +69,7 @@ good_env; BUILD_CERTIFICATE_BASE64='base64 -w 0 ~/BikeComputerSigning/distributi
 expect fail "command pasted instead of its output" "BUILD_CERTIFICATE_BASE64 isn't base64"
 
 good_env; PROVISIONING_PROFILE_BASE64="${PROVISIONING_PROFILE_BASE64:0:1001}"
-expect fail "cut-off profile" "PROVISIONING_PROFILE_BASE64 looks like base64 but doesn't decode"
+expect fail "cut-off profile" "PROVISIONING_PROFILE_BASE64 looks like base64 but is incomplete"
 
 good_env; PROVISIONING_PROFILE_BASE64=""
 expect fail "empty profile" "PROVISIONING_PROFILE_BASE64 is empty"
