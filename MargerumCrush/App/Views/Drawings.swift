@@ -184,9 +184,14 @@ struct VineyardBackdrop: View {
                     .fill(Color(red: 0.62, green: 0.66, blue: 0.55))
                 Hills(ridge: 0.2, amplitude: 0.02, phase: 3.2)
                     .fill(Color(red: 0.80, green: 0.70, blue: 0.45))
+                // The vineyard floor: sunlit at the back, darker up close.
                 Hills(ridge: 0.3, amplitude: 0.012, phase: 0.5)
-                    .fill(Color(red: 0.87, green: 0.80, blue: 0.58))
+                    .fill(LinearGradient(colors: [Color(red: 0.88, green: 0.81, blue: 0.58),
+                                                  Color(red: 0.70, green: 0.62, blue: 0.40),
+                                                  Color(red: 0.52, green: 0.47, blue: 0.30)],
+                                         startPoint: .top, endPoint: .bottom))
             }
+            .accessibilityHidden(true)
         }
     }
 }
@@ -224,6 +229,7 @@ struct Trellis: View {
             }
         }
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private func leaf(_ k: Int, _ row: Int) -> some View {
@@ -262,6 +268,7 @@ struct TitleBackdrop: View {
                     .fill(Color(red: 0.16, green: 0.10, blue: 0.12))
                 VineRows()
             }
+            .accessibilityHidden(true)
         }
     }
 }

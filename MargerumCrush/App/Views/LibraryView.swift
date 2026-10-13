@@ -49,7 +49,7 @@ struct LibraryView: View {
                 ScoreBadge(score: wine.score, size: 38)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("\(String(wine.vintage)) \(wine.spec.name)").font(.headline).foregroundStyle(Theme.ink)
-                    Text("\(wine.cases) cases · \(wine.verdict)").font(.caption).foregroundStyle(.secondary)
+                    Text("\(wine.cases) cases · \(wine.verdict)").font(.caption).foregroundStyle(Color.secondary)
                 }
             }
         }

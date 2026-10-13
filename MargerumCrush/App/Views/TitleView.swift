@@ -72,6 +72,7 @@ struct TitleView: View {
                 .padding(.bottom, 32)
             }
         }
+        .statusBarHidden()
         .confirmationDialog("Start a new winery? Your cellar, upgrades and wine library will be gone.",
                             isPresented: $confirmNewGame, titleVisibility: .visible) {
             Button("Start over", role: .destructive) { store.newGame() }

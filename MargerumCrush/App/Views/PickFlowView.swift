@@ -45,6 +45,7 @@ struct PickFlowView: View {
             }
         }
         .task(id: stage) { await run(stage) }
+        .statusBarHidden(stage == .countdown || stage == .picking)
         .confirmationDialog("Stop picking?", isPresented: $confirmQuit, titleVisibility: .visible) {
             Button("Call the crew back", role: .destructive) { dismiss() }
         } message: {

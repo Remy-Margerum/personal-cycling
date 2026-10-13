@@ -223,7 +223,10 @@ enum TastingNote {
             flavors.append("fresh-cut herbs")
         }
         if !flavors.isEmpty {
-            let lead = ["lead the way", "jump from the glass", "fill the nose", "come first"].randomElement(using: &rng) ?? ""
+            let leads = flavors.count == 1
+                ? ["leads the way", "jumps from the glass", "fills the nose", "comes first"]
+                : ["lead the way", "jump from the glass", "fill the nose", "come first"]
+            let lead = leads.randomElement(using: &rng) ?? leads[0]
             sentences.append("\(capitalized(list(flavors))) \(lead).")
         }
 

@@ -363,6 +363,19 @@ final class BlendTests: XCTestCase {
         XCTAssertTrue(analysis.canBottle)
     }
 
+    func testTastingNoteVerbsAgree() {
+        let single = WineSpec.sybarite.analyze([(lot(harvest(.sauvignonBlanc), .stainless), 100)])
+        let blend = WineSpec.m5.analyze([Varietal.syrah, .grenache, .mourvedre, .counoise, .cinsault]
+            .map { (lot(harvest($0)), 50) })
+        for seed in 1...20 {
+            var rng = SeededGenerator(seed: UInt64(seed))
+            let one = TastingNote.write(for: .sybarite, analysis: single, score: 93, faults: [], using: &rng)
+            let many = TastingNote.write(for: .m5, analysis: blend, score: 96, faults: [], using: &rng)
+            XCTAssertTrue(["leads", "jumps", "fills", "comes"].contains { one.contains(" \($0) ") }, one)
+            XCTAssertTrue(["lead", "jump", "fill", "come"].contains { many.contains(" \($0) ") }, many)
+        }
+    }
+
     func testOverripeWineRunsHot() {
         let raisins = lot(harvest(.syrah, brix: 28.5), .newOak)
         let analysis = WineSpec.uber.analyze([(raisins, 100)])

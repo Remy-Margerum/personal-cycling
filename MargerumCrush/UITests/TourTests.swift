@@ -26,6 +26,8 @@ final class TourTests: XCTestCase {
         snap("03 Harvest, week 4")
 
         tap(app.buttons["Pick"])
+        XCTAssertTrue(app.buttons["Start picking"].waitForExistence(timeout: 10))
+        sleep(1) // let it finish sliding up
         snap("04 Briefing")
         tap(app.buttons["Start picking"])
         play(screenshot: "05 Picking")
@@ -71,29 +73,29 @@ final class TourTests: XCTestCase {
 
     // MARK: Helpers
 
-    /// Picks ripe and perfect bunches until the round ends.
+    /// Picks ripe and perfect bunches until the round ends. One accessibility
+    /// snapshot per pass (each query is slow), then a tap on every good bunch.
     private func play(screenshot name: String?) {
         let start = Date()
         var snapped = name == nil
-        let window = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
-        while Date().timeIntervalSince(start) < 45 {
-            if app.buttons["To the crush pad"].exists || app.buttons["Back to the vineyard"].exists { break }
+        let origin = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+        while Date().timeIntervalSince(start) < 50 {
+            guard let tree = try? app.snapshot() else { continue }
+            if !frames(in: tree, labelled: ["To the crush pad", "Back to the vineyard"]).isEmpty { break }
             if !snapped, Date().timeIntervalSince(start) > 12, let name {
                 snap(name)
                 snapped = true
             }
-            guard let tree = try? app.snapshot() else { continue }
-            for frame in bunches(in: tree).prefix(3) {
-                window.withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
+            for frame in frames(in: tree, labelled: ["Ripe bunch", "Perfect bunch"]) {
+                origin.withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
             }
         }
         XCTAssertTrue(app.buttons["To the crush pad"].waitForExistence(timeout: 10), "nothing was picked")
     }
 
-    private func bunches(in element: XCUIElementSnapshot) -> [CGRect] {
-        var frames: [CGRect] = []
-        if element.label == "Ripe bunch" || element.label == "Perfect bunch" { frames.append(element.frame) }
-        for child in element.children { frames += bunches(in: child) }
+    private func frames(in element: XCUIElementSnapshot, labelled labels: Set<String>) -> [CGRect] {
+        var frames = labels.contains(element.label) ? [element.frame] : []
+        for child in element.children { frames += self.frames(in: child, labelled: labels) }
         return frames
     }
 
