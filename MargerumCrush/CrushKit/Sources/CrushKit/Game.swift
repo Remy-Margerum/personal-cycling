@@ -195,6 +195,30 @@ public struct Game: Codable, Equatable, Sendable {
 
     public var isLastWeek: Bool { week == HarvestCalendar.weeks - 1 }
 
+    /// The cellar master's advice for this week of the harvest.
+    public var advice: String? {
+        guard phase == .harvest, crushPad == nil else { return nil }
+        let hanging = blocks.filter { !$0.picked }
+        if hanging.isEmpty { return "Everything's picked. Time for the cellar." }
+        if picksLeft == 0 { return "The crews are busy until next week." }
+        if isLastWeek { return "Last week before the rains. Pick whatever you can." }
+        let ripeness = { (block: VineyardBlock) in block.ripeness(for: block.varietal.mainStyle) }
+        if let late = hanging.first(where: { ripeness($0) == .late || ripeness($0) == .raisined }) {
+            return "\(late.name) is getting overripe. Pick it soon."
+        }
+        if let ready = hanging.first(where: { ripeness($0) == .ready }) {
+            switch season[week].forecast {
+            case .rain: return "Rain is forecast. Pick \(ready.name) before mold sets in."
+            case .heatWave: return "A heat wave is coming, and sugar will jump. \(ready.name) is ready now."
+            case .sunny, .fog: return "\(ready.name) is ready to pick."
+            }
+        }
+        if let pink = hanging.first(where: { $0.varietal.isRed && $0.ripeness(for: .rose) == .ready }) {
+            return "\(pink.name) is in the pink: pick it now for rosé, or wait for red."
+        }
+        return "Nothing's ripe yet. Wait a week and watch the forecast."
+    }
+
     public func canPick(_ blockID: String) -> Bool {
         guard phase == .harvest, crushPad == nil, picksLeft > 0, let block = block(blockID) else { return false }
         return !block.picked

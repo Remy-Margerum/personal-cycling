@@ -30,7 +30,7 @@ the game.
    oak. Red grapes can go all red or *saignée*, which bleeds 20% off as rosé
    and concentrates the red. Grapes picked for rosé go straight to steel.
 4. **Blending lab.** Sliders for each lot, a live taste chart against the
-   critic's style (gold bands), the blend's colour, alcohol and an estimated
+   critic's style (gold bands), the blend's color, alcohol and an estimated
    score. Rules follow the labels: Sybarite and ÜBER need 75% of their
    grape, M5 needs all five (Syrah, Grenache, Mourvèdre, Counoise,
    Cinsault), and more grapes in a blend score a little higher.
@@ -48,8 +48,8 @@ the game.
     project.yml                XcodeGen spec (generates MargerumCrush.xcodeproj)
     Config/Signing.xcconfig    signing for the app target (CI overrides it)
     CrushKit/                  Swift package, no iOS dependencies, unit-tested
-      Basics                   seeded random numbers, colours, taste profiles
-      Varietal                 the six grapes: windows, ripening, flavour
+      Basics                   seeded random numbers, colors, taste profiles
+      Varietal                 the six grapes: windows, ripening, flavor
       Vineyard                 calendar, weather, vineyard blocks
       Picking                  the picking game (clock, spawns, taps, scoring)
       Cellar                   fruit quality, vessels, saignée, lots

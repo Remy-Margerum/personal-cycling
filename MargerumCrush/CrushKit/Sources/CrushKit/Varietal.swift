@@ -93,7 +93,7 @@ public enum Varietal: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    /// Flavour at the middle of the window, before any winemaking.
+    /// Flavor at the middle of the window, before any winemaking.
     var baseProfile: TasteProfile {
         switch self {
         case .sauvignonBlanc: TasteProfile(fruit: 6.5, acidity: 8, tannin: 0.5, body: 3.8, spice: 2.5)
@@ -105,7 +105,7 @@ public enum Varietal: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    /// Ripe berry colour, for drawing clusters.
+    /// Ripe berry color, for drawing clusters.
     public var berryColor: RGB {
         switch self {
         case .sauvignonBlanc: RGB(0.74, 0.80, 0.38)
@@ -117,7 +117,7 @@ public enum Varietal: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    /// Colour of the finished wine.
+    /// Color of the finished wine.
     public func wineColor(for style: WineStyle) -> RGB {
         switch style {
         case .white:
@@ -141,7 +141,7 @@ public enum Varietal: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    /// Flavour words for tasting notes, most typical first.
+    /// Flavor words for tasting notes, most typical first.
     func descriptors(for style: WineStyle) -> [String] {
         if style == .rose {
             switch self {

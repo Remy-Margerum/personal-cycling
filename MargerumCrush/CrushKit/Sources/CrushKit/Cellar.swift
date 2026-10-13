@@ -116,7 +116,7 @@ public struct Harvest: Codable, Equatable, Sendable {
         let window = varietal.window(for: style)
         let off = brix - window.middle
         var p = varietal.baseProfile + character
-        // Flavour follows ripeness for the style it was picked for...
+        // Flavor follows ripeness for the style it was picked for...
         p.fruit += 0.3 * off - 0.6 * window.distance(to: brix)
         p.spice -= 0.25 * off // early picks are peppery and herbal
         p.tannin += 0.15 * off
@@ -128,7 +128,7 @@ public struct Harvest: Codable, Equatable, Sendable {
         p.acidity += 2 * unripeShare
         p.spice += 1.5 * unripeShare
         if wineStyle == .rose {
-            // A few hours on the skins: colour and fruit, almost no tannin.
+            // A few hours on the skins: color and fruit, almost no tannin.
             p = TasteProfile(fruit: p.fruit * 0.9, acidity: p.acidity + 1, tannin: p.tannin * 0.15,
                              body: p.body * 0.5 + 0.3, spice: p.spice * 0.45)
         }

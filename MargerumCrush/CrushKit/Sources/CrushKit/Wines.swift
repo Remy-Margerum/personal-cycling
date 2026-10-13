@@ -212,19 +212,19 @@ enum TastingNote {
         case .red: sentences.append(p.body > 7.5 ? "Inky purple." : p.body > 6 ? "Deep garnet." : "Bright ruby.")
         }
 
-        var flavours: [String] = []
-        for part in analysis.composition where part.share >= 0.1 && flavours.count < 3 {
-            let words = part.varietal.descriptors(for: spec.style).filter { !flavours.contains($0) }
-            if let word = words.prefix(2).randomElement(using: &rng) { flavours.append(word) }
+        var flavors: [String] = []
+        for part in analysis.composition where part.share >= 0.1 && flavors.count < 3 {
+            let words = part.varietal.descriptors(for: spec.style).filter { !flavors.contains($0) }
+            if let word = words.prefix(2).randomElement(using: &rng) { flavors.append(word) }
         }
         if spec.style == .red && p.spice >= 6 {
-            flavours.append(["cracked pepper", "garrigue", "smoked meat"].randomElement(using: &rng) ?? "spice")
+            flavors.append(["cracked pepper", "garrigue", "smoked meat"].randomElement(using: &rng) ?? "spice")
         } else if spec.style == .white && p.spice >= 3 {
-            flavours.append("fresh-cut herbs")
+            flavors.append("fresh-cut herbs")
         }
-        if !flavours.isEmpty {
+        if !flavors.isEmpty {
             let lead = ["lead the way", "jump from the glass", "fill the nose", "come first"].randomElement(using: &rng) ?? ""
-            sentences.append("\(capitalized(list(flavours))) \(lead).")
+            sentences.append("\(capitalized(list(flavors))) \(lead).")
         }
 
         let body = p.body >= 8 ? "Full-bodied and generous" : p.body >= 5.5 ? "Medium-bodied" : "Light on its feet"

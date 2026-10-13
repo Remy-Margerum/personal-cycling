@@ -16,7 +16,7 @@ public struct SeededGenerator: RandomNumberGenerator, Codable, Equatable, Sendab
     }
 }
 
-/// A colour without SwiftUI, so berries and blends can be mixed (and tested)
+/// A color without SwiftUI, so berries and blends can be mixed (and tested)
 /// here. Components are 0...1.
 public struct RGB: Codable, Equatable, Sendable {
     public var red: Double
@@ -29,7 +29,7 @@ public struct RGB: Codable, Equatable, Sendable {
         self.blue = blue
     }
 
-    /// `amount` of the way from this colour to `other`.
+    /// `amount` of the way from this color to `other`.
     public func mixed(with other: RGB, _ amount: Double) -> RGB {
         RGB(red + (other.red - red) * amount,
             green + (other.green - green) * amount,

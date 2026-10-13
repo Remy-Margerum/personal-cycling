@@ -38,6 +38,24 @@ struct MiniGameView: View {
     private var badPicks: Int { round.tally.unripe + round.tally.rotten + round.tally.stings }
 
     private var hud: some View {
+        VStack(spacing: 6) {
+            scoreboard
+            // How much of the crop is in: three bunches in four is all of it.
+            HStack(spacing: 8) {
+                Text("Crop").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                ProgressView(value: round.harvestedShare).tint(Theme.leaf)
+                Text(Format.percent(round.harvestedShare))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 34, alignment: .trailing)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+    }
+
+    private var scoreboard: some View {
         HStack(alignment: .center, spacing: 12) {
             Button(action: quit) {
                 Image(systemName: "xmark")
@@ -67,9 +85,6 @@ struct MiniGameView: View {
             }
             .frame(minWidth: 80, alignment: .trailing)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
     }
 
     private func clusterView(_ cluster: PickingRound.Cluster, in size: CGSize) -> some View {

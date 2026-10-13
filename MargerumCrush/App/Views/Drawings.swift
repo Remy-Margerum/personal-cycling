@@ -42,7 +42,7 @@ struct GrapeCluster: View {
                 context.stroke(berry, with: .color(.black.opacity(0.2)), lineWidth: 0.7)
             }
             if mold {
-                // Grey fuzz on every other berry.
+                // Gray fuzz on every other berry.
                 for (index, center) in berries.enumerated() where index % 2 == 0 {
                     let fuzz = CGRect(x: center.x - r * 0.2, y: center.y - r * 0.6, width: r * 0.9, height: r * 0.8)
                     context.fill(Path(ellipseIn: fuzz), with: .color(.white.opacity(0.6)))

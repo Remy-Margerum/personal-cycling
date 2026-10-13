@@ -9,11 +9,11 @@ picks up whatever is here.
 |---|---|---|
 | `Title.png` | 1290×2796, portrait | Title screen. Keep the top third fairly plain: the title sits there |
 | `Vineyard.png` | 1290×2796, portrait | Picking game backdrop: sky and hills. Trellis wires and leaves are drawn on top |
-| `ClusterRed.png` | ~360×480, transparent | Ripe red grape bunch, stem at the top centre |
-| `ClusterRedUnripe.png` | ~360×480, transparent | Red grapes before they colour (green with a blush of pink) |
+| `ClusterRed.png` | ~360×480, transparent | Ripe red grape bunch, stem at the top center |
+| `ClusterRedUnripe.png` | ~360×480, transparent | Red grapes before they color (green with a blush of pink) |
 | `ClusterWhite.png` | ~360×480, transparent | Ripe Sauvignon Blanc bunch (golden green) |
 | `ClusterWhiteUnripe.png` | ~360×480, transparent | Hard, bright-green unripe bunch |
-| `ClusterRotten.png` | ~360×480, transparent | Grey, fuzzy, moldy bunch |
+| `ClusterRotten.png` | ~360×480, transparent | Gray, fuzzy, moldy bunch |
 | `ClusterGolden.png` | ~360×480, transparent | Shiny gold "perfect" bunch |
 | `Wasp.png` | ~240×240, transparent, facing right | The pest (flipped when it flies left) |
 | `LabelSybarite.png` | ~600×900, portrait | Front label on the Sybarite bottle |

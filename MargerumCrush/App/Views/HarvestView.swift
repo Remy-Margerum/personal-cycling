@@ -19,6 +19,14 @@ struct HarvestSection: View {
 
     var body: some View {
         VStack(spacing: 14) {
+            if let advice = game.advice {
+                Label(advice, systemImage: "lightbulb.fill")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Theme.ink)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.gold.opacity(0.18), in: .rect(cornerRadius: 14))
+            }
             ForecastCard(game: game)
             if let harvest = game.crushPad, request == nil {
                 // Picked, but the app closed before the fruit was crushed.

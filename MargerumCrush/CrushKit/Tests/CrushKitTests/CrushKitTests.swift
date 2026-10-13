@@ -30,7 +30,7 @@ final class BasicsTests: XCTestCase {
         XCTAssertEqual(TasteProfile(fruit: 12, oak: -1).clamped(), TasteProfile(fruit: 10, oak: 0))
     }
 
-    func testColourMix() {
+    func testColorMix() {
         let mix = RGB.mix([(RGB(1, 0, 0), 1), (RGB(0, 0, 1), 1)])
         XCTAssertEqual(mix, RGB(0.5, 0, 0.5))
         XCTAssertEqual(RGB.mix([]), RGB(0, 0, 0))
@@ -404,6 +404,29 @@ final class GameTests: XCTestCase {
         XCTAssertFalse(game.canPick(VineyardBlock.happyCanyonSauvignonBlanc.id), "already picked")
         XCTAssertEqual(game.bill.picking, Game.pickingCost)
         XCTAssertEqual(game.bill.grapes, fruit.tons * Varietal.sauvignonBlanc.pricePerTon, accuracy: 1e-6)
+    }
+
+    func testAdvice() throws {
+        var game = Game(vintage: 2026, seed: 9)
+        let sb = VineyardBlock.happyCanyonSauvignonBlanc.id
+        let grenache = VineyardBlock.losOlivosGrenache.id
+        let syrah = VineyardBlock.ballardCanyonSyrah.id
+        game.setBlock(sb) { $0.set(brix: 19) }
+        game.setBlock(grenache) { $0.set(brix: 18) }
+        game.setBlock(syrah) { $0.set(brix: 18) }
+        XCTAssertEqual(game.advice, "Nothing's ripe yet. Wait a week and watch the forecast.")
+        game.setBlock(grenache) { $0.set(brix: 21.5) }
+        XCTAssertEqual(game.advice, "Los Olivos Grenache is in the pink: pick it now for rosé, or wait for red.")
+        game.setBlock(sb) { $0.set(brix: 22.5) }
+        XCTAssertTrue(try XCTUnwrap(game.advice).contains("Happy Canyon Sauvignon Blanc is ready"))
+        game.setBlock(syrah) { $0.set(brix: 27.5) }
+        XCTAssertEqual(game.advice, "Ballard Canyon Syrah is getting overripe. Pick it soon.")
+        var round = try XCTUnwrap(game.startPicking(sb, for: .white))
+        play(&round)
+        game.bringIn(round, from: sb, for: .white)
+        XCTAssertNil(game.advice, "fruit on the crush pad")
+        game.crush(in: .stainless)
+        XCTAssertEqual(game.advice, "The crews are busy until next week.")
     }
 
     func testEmptyHandedCrewLeavesTheBlockHanging() throws {

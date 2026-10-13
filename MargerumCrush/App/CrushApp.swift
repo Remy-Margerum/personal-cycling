@@ -9,7 +9,7 @@ struct CrushApp: App {
             RootView()
                 .environment(store)
                 .tint(Theme.wine)
-                // The game is drawn in daylight colours; dark mode would
+                // The game is drawn in daylight colors; dark mode would
                 // fight the paper and the vineyard.
                 .preferredColorScheme(.light)
         }

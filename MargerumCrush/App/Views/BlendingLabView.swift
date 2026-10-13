@@ -95,7 +95,7 @@ struct BlendingLabView: View {
     }
 }
 
-/// The bottle, its colour and the winemaker's estimate.
+/// The bottle, its color and the winemaker's estimate.
 struct BlendPreview: View {
     let wine: WineID
     let vintage: Int

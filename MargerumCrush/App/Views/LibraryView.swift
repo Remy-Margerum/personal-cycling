@@ -80,7 +80,7 @@ struct HowToPlayView: View {
             + "gauge for red or white wine, pink for rosé. Each crew picks one block a week. After the last week the "
             + "rains come, and anything still hanging is lost."),
         Topic("Picking", "scissors",
-         "Tap ripe bunches before they wither. Leave the green ones and the grey, moldy ones: whatever lands in the "
+         "Tap ripe bunches before they wither. Leave the green ones and the gray, moldy ones: whatever lands in the "
             + "bins ends up in the wine. Gold bunches are perfect fruit. Swatting a wasp costs three seconds. Pick "
             + "about three bunches in four to bring in the whole crop."),
         Topic("The crush pad", "drop.fill",

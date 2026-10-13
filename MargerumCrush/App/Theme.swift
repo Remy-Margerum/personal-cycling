@@ -2,7 +2,7 @@ import CrushKit
 import SwiftUI
 import UIKit
 
-/// Colours for the whole game: Santa Barbara sun on old paper.
+/// Colors for the whole game: Santa Barbara sun on old paper.
 enum Theme {
     static let wine = Color(red: 0.45, green: 0.07, blue: 0.18)
     static let gold = Color(red: 0.76, green: 0.58, blue: 0.22)
@@ -91,7 +91,7 @@ struct Stars: View {
     }
 }
 
-/// A score in a circle, coloured by how good it is.
+/// A score in a circle, colored by how good it is.
 struct ScoreBadge: View {
     let score: Int
     var size: CGFloat = 44
@@ -154,14 +154,14 @@ enum Art {
 }
 
 extension PickingRound.Kind {
-    /// Berry colour for the drawn clusters.
+    /// Berry color for the drawn clusters.
     func color(for varietal: Varietal) -> Color {
         let ripe = varietal.berryColor
         switch self {
         case .ripe:
             return Color(ripe)
         case .unripe:
-            // Still green, with a blush of colour on red grapes.
+            // Still green, with a blush of color on red grapes.
             let green = RGB(0.40, 0.66, 0.22)
             return Color(varietal.isRed ? green.mixed(with: ripe, 0.3) : green)
         case .rotten:
