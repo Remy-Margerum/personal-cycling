@@ -60,6 +60,7 @@ the game.
       Views/                   title, harvest, picking, crush pad, cellar,
                                blending lab, review, winter, library, drawings
       Art/                     optional artwork (see Art/README.md)
+    UITests/TourTests          the screenshot tour (below)
 ```
 
 All the rules are in CrushKit, so they're tested without a phone:
@@ -73,6 +74,15 @@ expert, a dozen times each, and prints average scores and profits. Run it
 after changing any numbers: windows and ripening in `Varietal.swift`,
 quality in `Cellar.swift`, styles and scoring in `Wines.swift`, prices and
 upgrade costs in `Game.swift`.
+
+## Screenshots
+
+`.github/workflows/screenshots-crush.yml` plays a short first vintage in the
+iPhone simulator (`UITests/TourTests.swift`) on every push that touches the
+game: it picks two blocks, bottles Sybarite and a rosé and releases them. A
+screenshot of each screen lands in the run's **screenshots** artifact
+(GitHub → Actions → the run → Artifacts). It's a quick way to see a change
+without a phone, and a check that the game still plays from start to finish.
 
 ## Artwork
 

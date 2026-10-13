@@ -23,7 +23,9 @@ targets:
           - "**/*.md"
     dependencies:
       - package: CrushKit
-    scheme: {}   # shared scheme, so `xcodebuild -scheme MargerumCrush` works in CI
+    scheme:      # shared scheme, so `xcodebuild -scheme MargerumCrush` works in CI
+      testTargets:
+        - MargerumCrushUITests
     configFiles:
       Debug: Config/Signing.xcconfig
       Release: Config/Signing.xcconfig
@@ -47,3 +49,17 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+  # Plays a short vintage in the simulator and screenshots every screen
+  # (.github/workflows/screenshots-crush.yml). Not part of the archive.
+  MargerumCrushUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: MargerumCrush
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.remymargerum.margerumcrush.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"

@@ -1,0 +1,92 @@
+# Plays a short vintage of Margerum Crush in the iPhone simulator
+# (MargerumCrush/UITests/TourTests.swift) and uploads a screenshot of every
+# screen as the run's "screenshots" artifact: a way to see the game without
+# a phone or a Mac.
+name: Screenshots (Margerum Crush)
+
+on:
+  push:
+    paths:
+      - "MargerumCrush/**"
+      - ".github/workflows/screenshots-crush.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tour:
+    name: Simulator tour
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: MargerumCrush
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tools
+        run: |
+          brew install xcodegen xcbeautify
+          xcodebuild -version
+      - name: Generate project
+        run: xcodegen
+      # The newest iOS runtime's iPhone Pro, or any iPhone.
+      - name: Pick a simulator
+        id: simulator
+        run: |
+          udid=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          runtimes = json.load(sys.stdin)["devices"]
+          ios = sorted((r for r in runtimes if "iOS" in r), reverse=True)
+          phones = [d for r in ios for d in runtimes[r] if d["name"].startswith("iPhone")]
+          pro = [d for d in phones if d["name"].endswith(" Pro")]
+          print((pro or phones)[0]["udid"])
+          ')
+          xcrun simctl list devices available | grep "$udid"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      - name: Play the tour
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project MargerumCrush.xcodeproj \
+            -scheme MargerumCrush \
+            -destination "id=${{ steps.simulator.outputs.udid }}" \
+            -resultBundlePath "$RUNNER_TEMP/tour.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+      - name: Export screenshots
+        if: always()
+        run: |
+          out="$RUNNER_TEMP/screenshots"
+          mkdir -p "$out"
+          xcrun xcresulttool export attachments --path "$RUNNER_TEMP/tour.xcresult" --output-path "$out"
+          # Name the files after the screenshots: "01 Title.png", ...
+          python3 - "$out" <<'EOF'
+          import json, os, re, sys
+          out = sys.argv[1]
+          def walk(node):
+              if isinstance(node, dict):
+                  if "exportedFileName" in node and "suggestedHumanReadableName" in node:
+                      yield node
+                  for value in node.values():
+                      yield from walk(value)
+              elif isinstance(node, list):
+                  for value in node:
+                      yield from walk(value)
+          with open(os.path.join(out, "manifest.json")) as f:
+              manifest = json.load(f)
+          for attachment in walk(manifest):
+              name = attachment["suggestedHumanReadableName"]
+              name = re.sub(r"_\d+_[0-9A-Fa-f-]+(\.\w+)$", r"\1", name)
+              os.rename(os.path.join(out, attachment["exportedFileName"]), os.path.join(out, name))
+          EOF
+          ls -l "$out"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: warn

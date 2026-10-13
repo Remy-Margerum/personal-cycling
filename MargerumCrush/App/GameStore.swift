@@ -17,6 +17,11 @@ final class GameStore {
     }()
 
     init() {
+        // The screenshot tour (UITests) launches with -resetGame to start
+        // from the title screen, and -seed N for the same weather every time.
+        if ProcessInfo.processInfo.arguments.contains("-resetGame") {
+            try? FileManager.default.removeItem(at: url)
+        }
         if let data = try? Data(contentsOf: url) {
             game = try? JSONDecoder().decode(Game.self, from: data)
         }
@@ -24,7 +29,8 @@ final class GameStore {
 
     func newGame() {
         let year = Calendar.current.component(.year, from: Date())
-        game = Game(vintage: year, seed: UInt64.random(in: 1...UInt64.max))
+        let seed = UserDefaults.standard.integer(forKey: "seed")
+        game = Game(vintage: year, seed: seed > 0 ? UInt64(seed) : UInt64.random(in: 1...UInt64.max))
         save()
         showTitle = false
     }
