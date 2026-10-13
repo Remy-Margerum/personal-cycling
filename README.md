@@ -22,14 +22,21 @@ the `/cycling` page of [remymargerum.com](https://remymargerum.com/cycling/).
 signed or run on a phone.
 See [PLAN.md](PLAN.md) for what happens next.
 
+**Also in this repo:** [Margerum Crush](MargerumCrush/README.md), a separate
+iPhone game. You run a Santa Barbara County winery through harvest, pick
+grapes in a tapping game, and blend Sybarite, rosé, M5 and ÜBER Syrah for
+the critic. It has its own XcodeGen spec, Swift package, CI jobs and
+TestFlight workflow, and the cycling app doesn't depend on any of it.
+
 ## Layout
 
 ```
   project.yml                XcodeGen spec (generates the .xcodeproj)
   Config/Signing.xcconfig    signing for the app target (CI overrides it)
   .github/workflows/
-    ci.yml                   every push: RideKit tests + unsigned iOS archive
+    ci.yml                   every push: package tests + unsigned archives of both apps
     testflight.yml           push to main: signed archive → TestFlight
+    testflight-crush.yml     push to main touching MargerumCrush/: the game → TestFlight
   RideKit/                   Swift package, no iOS dependencies, unit-tested
     CyclingPowerMeasurement  parses 0x2A63 packets (power, balance, crank data)
     CadenceCalculator        crank revs → rpm, with counter wrap and coasting
@@ -47,6 +54,8 @@ See [PLAN.md](PLAN.md) for what happens next.
     Recording/RideRecorder         combines them, samples at 1 Hz
     Storage/                       ride files, Intervals.icu upload, Keychain, debug log
     Views/                         Ride, Sensors, History, Settings, Debug log screens
+  MargerumCrush/             the winery game: its own project.yml, CrushKit package
+                             and app (see MargerumCrush/README.md)
 ```
 
 ```

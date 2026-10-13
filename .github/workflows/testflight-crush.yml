@@ -1,0 +1,207 @@
+# Archives Margerum Crush, signs it for the App Store and uploads it to
+# TestFlight. Uses the bike app's signing secrets (one distribution
+# certificate and one App Store Connect API key cover every app on the team)
+# plus the game's own provisioning profile, CRUSH_PROVISIONING_PROFILE_BASE64.
+# Setup: MargerumCrush/README.md. Until every secret exists, runs finish
+# early with a notice instead of failing.
+name: TestFlight (Margerum Crush)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "MargerumCrush/**"
+      - ".github/workflows/testflight-crush.yml"
+      - ".github/scripts/check-signing-secrets.sh"
+  workflow_dispatch:
+
+concurrency:
+  group: testflight-crush
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    name: Archive and upload
+    runs-on: macos-26
+    steps:
+      - name: Check secrets
+        id: secrets
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          CRUSH_PROVISIONING_PROFILE_BASE64: ${{ secrets.CRUSH_PROVISIONING_PROFILE_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          missing=()
+          for name in APPLE_TEAM_ID BUILD_CERTIFICATE_BASE64 P12_PASSWORD CRUSH_PROVISIONING_PROFILE_BASE64 \
+                      ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::notice::Margerum Crush TestFlight upload skipped. Missing secrets: ${missing[*]} (MargerumCrush/README.md)"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.secrets.outputs.ready == 'true'
+
+      # Fails fast, naming each secret that's wrong and why, without printing
+      # any values. Decodes the certificate and profile for the next steps.
+      - name: Check signing secrets
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          CRUSH_PROVISIONING_PROFILE_BASE64: ${{ secrets.CRUSH_PROVISIONING_PROFILE_BASE64 }}
+          PROFILE_SECRET: CRUSH_PROVISIONING_PROFILE_BASE64
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: bash .github/scripts/check-signing-secrets.sh "$RUNNER_TEMP/signing"
+
+      - name: Tools
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          brew install xcodegen xcbeautify
+          xcodebuild -version
+
+      - name: Install certificate and provisioning profile
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+        run: |
+          signing="$RUNNER_TEMP/signing"   # decoded by "Check signing secrets"
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(uuidgen)"
+
+          # The profile must be for this app and contain this certificate.
+          security cms -D -i "$signing/profile.mobileprovision" > "$signing/profile.plist" 2> /dev/null \
+            || { echo "::error::CRUSH_PROVISIONING_PROFILE_BASE64 decodes, but not to a provisioning profile. Copy it again with the command in MargerumCrush/README.md."; exit 1; }
+          profile() { /usr/libexec/PlistBuddy -c "Print :$1" "$signing/profile.plist"; }
+          uuid="$(profile UUID)"
+          name="$(profile Name)"
+          app_id="$(profile Entitlements:application-identifier)"
+          echo "Profile \"$name\" ($uuid), expires $(profile ExpirationDate)"
+          [ "$app_id" = "$APPLE_TEAM_ID.com.remymargerum.margerumcrush" ] \
+            || { echo "::error::The provisioning profile is for App ID $app_id, not com.remymargerum.margerumcrush. Make the profile for that App ID."; exit 1; }
+          sha1() { openssl x509 -inform "$1" -noout -fingerprint -sha1 2> /dev/null | sed 's/.*=//; s/://g'; }
+          certificate_sha1="$(openssl pkcs12 -in "$signing/certificate.p12" -nokeys -passin env:P12_PASSWORD 2> /dev/null | sha1 PEM)"
+          profile_sha1s=""
+          i=0
+          while [ $i -lt 20 ] && der="$(plutil -extract "DeveloperCertificates.$i" raw -o - "$signing/profile.plist" 2> /dev/null)"; do
+            profile_sha1s="$profile_sha1s $(printf '%s' "$der" | base64 --decode 2> /dev/null | sha1 DER)"
+            i=$((i + 1))
+          done
+          if [ -n "${profile_sha1s// /}" ] && [[ $profile_sha1s != *"$certificate_sha1"* ]]; then
+            echo "::error::The provisioning profile was made with a different certificate than the one in BUILD_CERTIFICATE_BASE64. Edit the profile, pick the new certificate, download it again and update CRUSH_PROVISIONING_PROFILE_BASE64."
+            exit 1
+          fi
+          echo "Profile matches the app and the certificate"
+
+          # A throwaway keychain holding only the distribution certificate.
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$signing/certificate.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$keychain" \
+            || { echo "::error::macOS couldn't import the certificate. If the .p12 was made on Windows, remake it with the -certpbe/-keypbe/-macalg flags from PLAN.md."; exit 1; }
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$signing/certificate.p12"
+          echo "Signing identities:"
+          security find-identity -v -p codesigning "$keychain"
+
+          for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" \
+                     "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$dir"
+            cp "$signing/profile.mobileprovision" "$dir/$uuid.mobileprovision"
+          done
+
+          # Manual App Store signing for the app target only (see MargerumCrush/Config/Signing.xcconfig).
+          {
+            echo "CODE_SIGN_STYLE = Manual"
+            echo "DEVELOPMENT_TEAM = $APPLE_TEAM_ID"
+            echo "CRUSH_CODE_SIGN_IDENTITY = Apple Distribution"
+            echo "PROVISIONING_PROFILE_SPECIFIER = $name"
+          } > MargerumCrush/Config/Signing.local.xcconfig
+
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.remymargerum.margerumcrush</key><string>$name</string>
+            </dict>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Generate project
+        if: steps.secrets.outputs.ready == 'true'
+        working-directory: MargerumCrush
+        run: xcodegen
+
+      # Every upload needs a higher build number: run number, then attempt
+      # (a re-run of run 7 uploads 7.2 after 7.1).
+      - name: Archive
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project MargerumCrush/MargerumCrush.xcodeproj \
+            -scheme MargerumCrush \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/MargerumCrush.xcarchive" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }}.${{ github.run_attempt }} \
+            | xcbeautify --renderer github-actions
+
+      - name: Export .ipa
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/MargerumCrush.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            | xcbeautify --renderer github-actions
+          ls -l "$RUNNER_TEMP/export"
+
+      - name: Upload to TestFlight
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          # altool looks for the key as AuthKey_<id>.p8 in this folder.
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s\n' "$ASC_KEY_P8" | tr -d '\r' > ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
+          xcrun altool --upload-app --type ios \
+            --file "$(ls "$RUNNER_TEMP"/export/*.ipa)" \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+          echo "::notice::Uploaded build ${{ github.run_number }}.${{ github.run_attempt }}. It shows up in TestFlight after Apple finishes processing (usually 5-15 minutes)."
+
+      - name: Clean up signing files
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+          rm -rf ~/.appstoreconnect/private_keys MargerumCrush/Config/Signing.local.xcconfig "$RUNNER_TEMP/signing"

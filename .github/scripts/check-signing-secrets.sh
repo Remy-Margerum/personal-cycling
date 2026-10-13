@@ -3,7 +3,9 @@
 # decodes the certificate and provisioning profile into the given folder:
 #   certificate.p12, profile.mobileprovision
 # Reads the secrets from the environment. Prints only facts about them
-# (lengths, formats, which one is wrong), never their values.
+# (lengths, formats, which one is wrong), never their values. The profile
+# comes from PROVISIONING_PROFILE_BASE64, or from the secret PROFILE_SECRET
+# names (Margerum Crush uses CRUSH_PROVISIONING_PROFILE_BASE64).
 # Tested on Linux by .github/scripts/test-check-signing-secrets.sh.
 set -uo pipefail
 
@@ -84,7 +86,7 @@ if decode BUILD_CERTIFICATE_BASE64 "$out/certificate.p12"; then
   fi
 fi
 
-decode PROVISIONING_PROFILE_BASE64 "$out/profile.mobileprovision" || true
+decode "${PROFILE_SECRET:-PROVISIONING_PROFILE_BASE64}" "$out/profile.mobileprovision" || true
 
 if [ "$problems" -gt 0 ]; then
   echo "$problems problem(s) with the signing secrets; see the errors above."
