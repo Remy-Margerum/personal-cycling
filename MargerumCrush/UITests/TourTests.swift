@@ -11,11 +11,12 @@ final class TourTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["-seed", "3", "-resetGame", "YES"]
+        app.launchArguments = ["-seed", "3", "-resetGame", "YES", "-autopick", "YES"]
         app.launch()
     }
 
     func testTour() throws {
+        sleep(8) // the freshly booted simulator likes to show a notification first
         snap("01 Title")
         tap(app.buttons["Start the harvest"])
         snap("02 Harvest")
@@ -73,30 +74,15 @@ final class TourTests: XCTestCase {
 
     // MARK: Helpers
 
-    /// Picks ripe and perfect bunches until the round ends. One accessibility
-    /// snapshot per pass (each query is slow), then a tap on every good bunch.
+    /// Waits out a picking round. The app picks for itself (-autopick):
+    /// XCUITest waits for the app to go idle before every query and tap, and
+    /// a round never does, so a test can't pick fast enough.
     private func play(screenshot name: String?) {
-        let start = Date()
-        var snapped = name == nil
-        let origin = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
-        while Date().timeIntervalSince(start) < 50 {
-            guard let tree = try? app.snapshot() else { continue }
-            if !frames(in: tree, labelled: ["To the crush pad", "Back to the vineyard"]).isEmpty { break }
-            if !snapped, Date().timeIntervalSince(start) > 12, let name {
-                snap(name)
-                snapped = true
-            }
-            for frame in frames(in: tree, labelled: ["Ripe bunch", "Perfect bunch"]) {
-                origin.withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
-            }
+        if let name {
+            sleep(14)
+            snap(name)
         }
-        XCTAssertTrue(app.buttons["To the crush pad"].waitForExistence(timeout: 10), "nothing was picked")
-    }
-
-    private func frames(in element: XCUIElementSnapshot, labelled labels: Set<String>) -> [CGRect] {
-        var frames = labels.contains(element.label) ? [element.frame] : []
-        for child in element.children { frames += self.frames(in: child, labelled: labels) }
-        return frames
+        XCTAssertTrue(app.buttons["To the crush pad"].waitForExistence(timeout: 50), "nothing was picked")
     }
 
     private func button(startingWith prefix: String) -> XCUIElement {

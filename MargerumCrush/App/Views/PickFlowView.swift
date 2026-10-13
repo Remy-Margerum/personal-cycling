@@ -6,6 +6,10 @@ import SwiftUI
 struct PickFlowView: View {
     enum Stage { case briefing, countdown, picking, results, crush }
 
+    /// The screenshot tour (UITests) launches with -autopick: the app picks
+    /// the good bunches itself, because UI tests can't keep up with a round.
+    private static let autopick = ProcessInfo.processInfo.arguments.contains("-autopick")
+
     @Environment(GameStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     let request: PickRequest
@@ -70,6 +74,11 @@ struct PickFlowView: View {
                 // doesn't skip half the round.
                 round.advance(by: min(0.1, now.timeIntervalSince(last)))
                 last = now
+                if Self.autopick {
+                    for cluster in round.clusters where cluster.kind.isGood && cluster.age(at: round.time) > 0.5 {
+                        round.pick(cluster.id)
+                    }
+                }
             }
             guard !Task.isCancelled else { return }
             harvest = store.play { $0.bringIn(round, from: request.block.id, for: request.style) } ?? nil

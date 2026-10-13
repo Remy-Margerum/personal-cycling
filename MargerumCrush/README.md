@@ -79,7 +79,9 @@ upgrade costs in `Game.swift`.
 
 `.github/workflows/screenshots-crush.yml` plays a short first vintage in the
 iPhone simulator (`UITests/TourTests.swift`) on every push that touches the
-game: it picks two blocks, bottles Sybarite and a rosé and releases them. A
+game: it picks two blocks (the app picks for itself when launched with
+`-autopick`, since UI tests can't keep up), bottles Sybarite and a rosé and
+releases them. A
 screenshot of each screen lands in the run's **screenshots** artifact
 (GitHub → Actions → the run → Artifacts). It's a quick way to see a change
 without a phone, and a check that the game still plays from start to finish.
