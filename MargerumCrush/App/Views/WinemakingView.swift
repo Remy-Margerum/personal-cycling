@@ -301,6 +301,12 @@ struct CrushHUD: View {
 
     private var sinceDry: Double { session.hours - (session.dryAt ?? session.hours) }
 
+    /// Red: hours on the skins before the yeast went in (or so far).
+    private var soaked: Double {
+        guard let crushed = session.crushedAt else { return 0 }
+        return (session.yeastAt ?? session.hours) - crushed
+    }
+
     private var styleName: String {
         switch session.harvest.style {
         case .red: "Red"
@@ -345,6 +351,8 @@ struct CrushHUD: View {
                 Meter(title: "Juice color", value: s.color, range: 0...0.7, good: Winemaking.pink,
                       text: s.bleed > 0 ? "Bled \(Format.percent(s.bleed))" : "\(Int(s.hours.rounded())) h",
                       tint: Color(s.harvest.varietal.roseColor(s.color)))
+                Meter(title: "Cold soak", value: soaked, range: 0...(s.yeastWindow.upperBound + 12), good: s.yeastWindow,
+                      text: s.yeastAt == nil ? "\(Int(soaked.rounded())) h" : "Yeast in")
                 Meter(title: "Temp", value: s.temperature, range: 5...35, good: 10...24, text: "\(Int(s.temperature.rounded()))°C")
             case .fermenting:
                 Meter(title: "Sugar", value: s.sugar, range: -2...28, good: -2...0, text: "\(Format.one(s.sugar))°")
