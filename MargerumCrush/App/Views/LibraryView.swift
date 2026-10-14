@@ -87,8 +87,8 @@ struct HowToPlayView: View {
             + "sugar and acid as you go: an early or late pick is rescued by what you leave. Seven bunches in ten "
             + "bring in the whole crop. Swatting a wasp costs three seconds."),
         Topic("Doug's crush", "figure.walk",
-         "After each pick, walk Doug around the winery floor: drag the stick, or tap a machine to send him there, "
-            + "then press the big button. Reds: destem (or keep a third whole clusters when the stems are brown, for "
+         "After each pick, Doug works the winery floor: tap a machine and he walks over and works it (or drag the "
+            + "stick and use the big button). Reds: destem (or keep a third whole clusters when the stems are brown, for "
             + "spice and structure), bleed some pink juice off for saignée if you like, add the yeast after a cold "
             + "soak, punch down the cap before it dries out, keep it 24–31 °C with the chiller, "
             + "press, and barrel down. Rosé: crush into the press and press at pale salmon. Sybarite: whole-cluster "

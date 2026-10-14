@@ -1,8 +1,8 @@
 import CrushKit
 import SwiftUI
 
-/// Doug's crush, played on the winery floor: walk him to each machine (drag
-/// the stick, or tap a machine) and do each job at the right moment.
+/// Doug's crush, played on the winery floor: tap a machine and he walks over
+/// and works it (or steer him with the stick), each job at the right moment.
 struct WinemakingView: View {
     /// The screenshot tour (UITests) launches with -autopick: Doug plays himself.
     private static let autopilot = ProcessInfo.processInfo.arguments.contains("-autopick")
@@ -79,12 +79,9 @@ struct WinemakingView: View {
         }
     }
 
+    /// One tap: Doug walks to the machine and works it.
     private func tap(_ station: StationID) {
-        if session.station == station, session.availableAction != nil {
-            session.act()
-        } else {
-            session.walk(to: station)
-        }
+        session.operate(station)
     }
 
     // MARK: Controls

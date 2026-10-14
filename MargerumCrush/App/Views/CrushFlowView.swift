@@ -91,7 +91,8 @@ struct CrushBriefingView: View {
                 }
                 .card()
 
-                Label("Drag the stick to walk Doug, or tap a machine to send him there. When he's next to it, the big button does the job.",
+                Label("Tap a machine and Doug walks over and works it. Or drag the stick to walk him yourself "
+                      + "and use the big button.",
                       systemImage: "hand.tap.fill")
                     .font(.footnote)
                     .foregroundStyle(.secondary)

@@ -39,8 +39,9 @@ made up for the game.
    wasps (−3 s).
 3. **Doug's crush.** A briefing says what this fruit needs and when, then
    you either **make it with Doug** or leave it to the cellar crew (decent,
-   never inspired). With Doug, you walk him around the winery floor (thumb
-   stick, or tap a machine) and do each job at its moment, against a clock
+   never inspired). With Doug, you tap a machine and he walks over and
+   works it (or steer him with the thumb stick and the big button), doing
+   each job at its moment, against a clock
    that runs slow at the press and fast through the fermentation:
    - white: whole clusters into the press, and stop it before the bitter
      press juice; settle the juice cold, add the yeast, keep it cool;

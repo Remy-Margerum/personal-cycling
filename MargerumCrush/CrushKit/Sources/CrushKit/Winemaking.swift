@@ -381,6 +381,9 @@ public struct Winemaking: Sendable {
             walker.stop()
         } else {
             walker.advance(by: dt, stick: stick)
+            if let arrived = walker.arrived, actions(at: arrived).count == 1 {
+                act()
+            }
         }
         var left = dt * hoursPerSecond
         while left > 1e-9 && stage != .done {
@@ -393,6 +396,13 @@ public struct Winemaking: Sendable {
     /// Sends Doug to a station on his own.
     public mutating func walk(to station: StationID?) {
         walker.walk(to: station)
+    }
+
+    /// A tap on a machine: Doug walks over and does the job there, unless the
+    /// machine offers a choice (whole clusters at the destemmer), which waits
+    /// for the player.
+    public mutating func operate(_ station: StationID) {
+        walker.walk(to: station, operate: true)
     }
 
     /// Does whatever can be done where Doug stands, or one particular thing

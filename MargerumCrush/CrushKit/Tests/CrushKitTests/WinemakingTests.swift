@@ -105,6 +105,33 @@ final class WinemakingTests: XCTestCase {
                                                                                lookahead: true), .destem)
     }
 
+    func testOneTapSendsDougToWorkAMachine() {
+        // He walks to the press and loads it when he gets there.
+        var w = Winemaking(harvest: harvest(.sauvignonBlanc))
+        w.operate(.press)
+        w.advance(by: 1.0 / 30)
+        XCTAssertEqual(w.stage, .waiting, "still walking")
+        for _ in 0..<300 where w.stage == .waiting { w.advance(by: 1.0 / 30) }
+        XCTAssertEqual(w.stage, .pressing)
+        XCTAssertEqual(w.station, .press)
+        XCTAssertEqual(w.busyWith, .loadPress)
+
+        // The destemmer offers a choice, so he waits for the player.
+        var red = Winemaking(harvest: harvest(.syrah))
+        red.operate(.destemmer)
+        for _ in 0..<300 { red.advance(by: 1.0 / 30) }
+        XCTAssertEqual(red.station, .destemmer)
+        XCTAssertEqual(red.stage, .waiting)
+
+        // Taking the stick calls the errand off.
+        var steered = Winemaking(harvest: harvest(.sauvignonBlanc))
+        steered.operate(.press)
+        steered.advance(by: 1.0 / 30, stick: FloorPoint(-1, 0))
+        for _ in 0..<300 { steered.advance(by: 1.0 / 30) }
+        XCTAssertEqual(steered.stage, .waiting)
+        XCTAssertNil(steered.walker.errand)
+    }
+
     func testTheClockRunsSlowAtThePressAndFastInTheFerment() {
         var w = Winemaking(harvest: harvest(.sauvignonBlanc))
         w.perform(.loadPress)

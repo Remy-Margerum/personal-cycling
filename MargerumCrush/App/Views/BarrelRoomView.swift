@@ -73,6 +73,10 @@ struct BarrelRoomView: View {
             clock += dt
             if busy > 0 { busy = max(0, busy - dt) }
             walker.advance(by: dt, stick: stick)
+            // Sent to a machine with a tap: he works it when he gets there.
+            if let arrived = walker.arrived, let game = store.game, action(at: arrived, game) != nil {
+                act(game)
+            }
             popups = popups.compactMap { popup in
                 let age = popup.age + dt / 1.6
                 return age < 1 ? FloorPopup(id: popup.id, text: popup.text, tint: popup.tint, station: popup.station, age: age) : nil
@@ -84,13 +88,10 @@ struct BarrelRoomView: View {
         }
     }
 
+    /// One tap: Doug walks to the barrels or the lab bench and works them.
     private func tap(_ station: StationID, _ game: Game) {
-        if walker.station == station, action(at: station, game) != nil {
-            act(game)
-        } else {
-            walker.walk(to: station)
-            moves += 1
-        }
+        walker.walk(to: station, operate: true)
+        moves += 1
     }
 
     private func popup(_ text: String, at station: StationID, good: Bool = true) {
