@@ -233,7 +233,7 @@ public struct Game: Codable, Equatable, Sendable {
     /// Sends a crew into a block. Nil if no crew is free or it's been picked.
     public mutating func startPicking(_ blockID: String, for style: WineStyle, duration: Double = 30) -> PickingRound? {
         guard canPick(blockID), let block = block(blockID), block.varietal.styles.contains(style) else { return nil }
-        return PickingRound(block: block, style: style, duration: duration, seed: rng.next())
+        return PickingRound(block: block, style: style, weather: season[week].actual, duration: duration, seed: rng.next())
     }
 
     /// Brings in the fruit from a finished round. It waits on the crush pad
@@ -251,19 +251,30 @@ public struct Game: Codable, Equatable, Sendable {
             return nil
         }
         blocks[index].picked = true
-        let tally = round.tally
-        let sortedOut = owns(.sortingTable) ? Int((Double(tally.rotten) * 0.75).rounded()) : 0
-        let rotten = Double(tally.rotten - sortedOut)
-        let fruit = Double(tally.ripe + tally.golden + tally.unripe) + rotten
+        // The sorting table catches most of the moldy and sour bunches, and
+        // the leaves and canes.
+        var bin = round.bin
+        var sortedOut = 0
+        if owns(.sortingTable) {
+            for kind in [PickingRound.Kind.rotten, .sour, .leaf, .cane] {
+                let n = Int((Double(bin.count(kind)) * 0.75).rounded())
+                for _ in 0..<n { bin.remove(kind) }
+                sortedOut += n
+            }
+        }
+        let expected = round.expected
         bill.grapes += tons * block.varietal.pricePerTon
         let harvest = Harvest(blockID: block.id, blockName: block.name, varietal: block.varietal, style: style,
-                              tons: tons, brix: block.brix, acid: block.acid,
-                              unripeShare: Double(tally.unripe) / fruit, rotShare: rotten / fruit,
-                              sortedOut: sortedOut, picking: round.summary, site: block.site,
-                              character: block.character, temperature: season[week].actual.fruitTemperature)
+                              tons: tons, brix: block.brix + bin.brix - expected.brix,
+                              acid: max(3, block.acid + bin.acid - expected.acid),
+                              rotShare: bin.rotShare, sourShare: bin.sourShare, mogShare: bin.mogShare,
+                              tannin: bin.tannin - expected.tannin, color: bin.color - expected.color,
+                              green: bin.green, complexity: bin.complexity, sortedOut: sortedOut,
+                              picking: round.summary, site: block.site, character: block.character,
+                              temperature: season[week].actual.fruitTemperature)
         crushPad = harvest
         let purpose = style == .rose ? " for rosé" : ""
-        note("Picked \(oneDecimal(tons)) tons of \(block.name)\(purpose) at \(oneDecimal(block.brix))° Brix.")
+        note("Picked \(oneDecimal(tons)) tons of \(block.name)\(purpose) at \(oneDecimal(harvest.brix))° Brix.")
         return harvest
     }
 

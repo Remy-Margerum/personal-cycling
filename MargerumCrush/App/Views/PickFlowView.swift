@@ -90,7 +90,8 @@ struct PickFlowView: View {
     }
 }
 
-/// What the crew is about to do, and how to play.
+/// What the crew is about to do, what each bunch does to the wine, and how
+/// to play.
 struct BriefingView: View {
     let request: PickRequest
     let round: PickingRound
@@ -108,34 +109,47 @@ struct BriefingView: View {
                         .textCase(.uppercase)
                         .foregroundStyle(Theme.wine)
                     Text(block.name).font(.largeTitle.weight(.bold)).fontDesign(.serif)
-                    Text("\(Format.tons(block.tons)) · \(Format.one(block.brix))° Brix · \(block.ripeness(for: request.style).label)")
+                    Text("\(Format.tons(block.tons)) · \(Format.one(block.brix))° Brix · \(Format.one(block.acid)) g/L acid · "
+                         + block.ripeness(for: request.style).label)
                         .foregroundStyle(.secondary)
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    rule(.ripe, "Ripe bunches", "Tap them before they wither.")
-                    rule(.golden, "Perfect bunches", "Rare and worth a lot. Grab them.")
-                    rule(.unripe, "Green bunches", "Leave them. They make the wine taste green.")
-                    rule(.rotten, "Moldy bunches", "Leave them. Mold ruins wine.")
-                    HStack(spacing: 14) {
-                        WaspSprite().frame(width: 44, height: 44)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Wasps").font(.headline)
-                            Text("Don't swat them. A sting costs \(Int(PickingRound.sting)) seconds.")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Aim for \(Format.one(round.window.lowerBound))–\(Format.one(round.window.upperBound))° Brix in the bins.",
+                          systemImage: "target")
+                        .font(.subheadline.weight(.semibold))
+                    Text(advice)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .card()
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("What each bunch does").font(.headline)
+                    LazyVGrid(columns: [GridItem(.flexible(), alignment: .topLeading), GridItem(.flexible(), alignment: .topLeading)],
+                              alignment: .leading, spacing: 12) {
+                        ForEach(kinds, id: \.self) { kind in
+                            HStack(alignment: .top, spacing: 8) {
+                                ClusterSprite(kind: kind, varietal: block.varietal)
+                                    .frame(width: 30, height: 40)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(kind.name).font(.caption.weight(.semibold))
+                                    Text(effect(kind)).font(.caption2).foregroundStyle(.secondary)
+                                }
+                            }
                         }
+                    }
+                    HStack(spacing: 14) {
+                        WaspSprite().frame(width: 34, height: 34)
+                        Text("Don't swat the wasps: a sting costs \(Int(PickingRound.sting)) seconds.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .card()
 
-                if round.unripeShare > 0.2 {
-                    tip("It's early: expect a lot of green bunches. Skip them, even if it means less wine.")
-                }
-                if round.rotShare > 0.1 {
-                    tip("Mold is spreading in this block. Sort carefully.")
-                }
-                Text("Picking about three bunches in four brings in the whole crop.")
+                Text("Picking about seven bunches in ten brings in the whole crop. Skipping bunches makes less wine, "
+                     + "but better wine.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -156,21 +170,46 @@ struct BriefingView: View {
         }
     }
 
-    private func rule(_ kind: PickingRound.Kind, _ title: String, _ detail: String) -> some View {
-        HStack(spacing: 14) {
-            ClusterSprite(kind: kind, varietal: request.block.varietal)
-                .frame(width: 34, height: 44)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline)
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
-            }
-        }
+    private var kinds: [PickingRound.Kind] {
+        PickingRound.Kind.allCases.filter { (round.odds[$0] ?? 0) > 0.004 }
     }
 
-    private func tip(_ text: String) -> some View {
-        Label(text, systemImage: "exclamationmark.triangle.fill")
-            .font(.subheadline)
-            .foregroundStyle(Theme.wine)
+    /// What the bin needs from this block.
+    private var advice: String {
+        let brix = round.baseBrix
+        var lines: [String] = []
+        if brix < round.window.lowerBound - 0.3 {
+            lines.append("It's early: the block is under the window. Skip shaded, wing and green-stemmed bunches and "
+                         + "the bins come in riper; sunny and raisined ones push it up.")
+        } else if brix > round.window.upperBound + 0.3 {
+            lines.append("It's late: the block is over the window. A few shaded bunches bring the sugar down and the "
+                         + "acid up; leave the raisined ones.")
+        } else {
+            lines.append("Right in the window: pick the sunny, brown-stemmed bunches and the hens and chicks.")
+        }
+        if (round.odds[.rotten] ?? 0) + (round.odds[.sour] ?? 0) > 0.08 {
+            lines.append("Rot is spreading: watch for gray mold and sour rot.")
+        }
+        if request.block.varietal == .sauvignonBlanc {
+            lines.append("Sybarite likes a little green: a few shaded bunches add grass and lemongrass.")
+        }
+        return lines.joined(separator: " ")
+    }
+
+    private func effect(_ kind: PickingRound.Kind) -> String {
+        switch kind {
+        case .ripe: "The good stuff. Sugar, color, ripe tannin."
+        case .greenStem: "Not really ripe: green, bitter edges."
+        case .shaded: "Less sugar, more acid, green notes."
+        case .wing: "Hard and sour. Leave it."
+        case .shot: "Small berries: tannin, color, complexity."
+        case .raisined: "Lots of sugar, little acid. Jammy."
+        case .rotten: "Gray mold: musty. Leave it."
+        case .sour: "Sour rot: vinegar. Leave it."
+        case .golden: "Perfect. Complexity. Grab it."
+        case .leaf: "Bitter and leafy. Don't grab it."
+        case .cane: "Woody and bitter. Don't grab it."
+        }
     }
 }
 
@@ -192,7 +231,7 @@ struct Countdown: View {
     }
 }
 
-/// What came back in the bins.
+/// What came back in the bins: the bunches, and the must they make.
 struct PickResultsView: View {
     let block: VineyardBlock
     let round: PickingRound
@@ -215,33 +254,62 @@ struct PickResultsView: View {
                     }
                 }
 
-                let tally = round.tally
+                if let harvest {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("The must").font(.headline)
+                        HStack(spacing: 12) {
+                            Meter(title: "Sugar", value: harvest.brix,
+                                  range: (round.window.lowerBound - 3)...(round.window.upperBound + 3), good: round.window,
+                                  text: "\(Format.one(harvest.brix))°")
+                            Meter(title: "Acid", value: harvest.acid, range: (round.idealAcid - 3)...(round.idealAcid + 3),
+                                  good: (round.idealAcid - 0.9)...(round.idealAcid + 0.9), text: "\(Format.one(harvest.acid)) g/L")
+                        }
+                        HStack {
+                            stat("Tannin", signed(harvest.tannin))
+                            stat("Green", Format.one(harvest.green))
+                            stat("Complexity", Format.one(harvest.complexity))
+                            stat("Leaves & canes", Format.percent(harvest.mogShare))
+                        }
+                        Text("Brix and acid of the block: \(Format.one(block.brix))° and \(Format.one(block.acid)) g/L.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .card()
+                }
+
                 VStack(spacing: 10) {
-                    row(.ripe, "Ripe", tally.ripe)
-                    row(.golden, "Perfect", tally.golden)
-                    row(.unripe, "Green", tally.unripe)
-                    row(.rotten, "Moldy", tally.rotten, note: sortedNote)
+                    ForEach(PickingRound.Kind.allCases.filter { round.bin.count($0) > 0 }, id: \.self) { kind in
+                        HStack(spacing: 12) {
+                            ClusterSprite(kind: kind, varietal: block.varietal).frame(width: 22, height: 30)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(kind.name)
+                                if let note = note(for: kind) {
+                                    Text(note).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                            Text(String(round.bin.count(kind))).font(.headline.monospacedDigit())
+                        }
+                    }
+                    if round.bin.bunches == 0 {
+                        Text("No fruit picked.").foregroundStyle(.secondary)
+                    }
+                    Divider()
                     HStack {
-                        Text("Withered on the vine").foregroundStyle(.secondary)
+                        Text("Good bunches left on the vine").foregroundStyle(.secondary)
                         Spacer()
-                        Text(String(tally.missed)).monospacedDigit()
+                        Text(String(round.missed)).monospacedDigit()
                     }
                     HStack {
                         Text("Wasp stings").foregroundStyle(.secondary)
                         Spacer()
-                        Text(String(tally.stings)).monospacedDigit()
+                        Text(String(round.stings)).monospacedDigit()
                     }
                 }
                 .card()
 
                 if let harvest {
                     VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("Clean fruit")
-                            Spacer()
-                            Text(Format.percent(1 - harvest.unripeShare - harvest.rotShare))
-                                .font(.headline.monospacedDigit())
-                        }
                         HStack {
                             Text("Fruit quality")
                             Spacer()
@@ -251,15 +319,6 @@ struct PickResultsView: View {
                     }
                     .card()
                 }
-
-                HStack {
-                    Label("\(round.points) points", systemImage: "star.fill")
-                    Spacer()
-                    Text("Best streak: \(round.bestStreak)")
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.gold)
-                .padding(.horizontal, 4)
             }
             .padding(20)
         }
@@ -275,22 +334,21 @@ struct PickResultsView: View {
         }
     }
 
-    private var sortedNote: String? {
-        guard let sorted = harvest?.sortedOut, sorted > 0 else { return nil }
-        return "\(sorted) caught by the sorting table"
+    private func signed(_ value: Double) -> String {
+        abs(value) < 0.05 ? "0" : (value > 0 ? "+" : "−") + Format.one(abs(value))
     }
 
-    private func row(_ kind: PickingRound.Kind, _ title: String, _ count: Int, note: String? = nil) -> some View {
-        HStack(spacing: 12) {
-            ClusterSprite(kind: kind, varietal: block.varietal).frame(width: 22, height: 30)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                if let note {
-                    Text(note).font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-            Text(String(count)).font(.headline.monospacedDigit())
+    private func note(for kind: PickingRound.Kind) -> String? {
+        guard let sorted = harvest?.sortedOut, sorted > 0,
+              [.rotten, .sour, .leaf, .cane].contains(kind) else { return nil }
+        return "The sorting table caught most of these"
+    }
+
+    private func stat(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title).font(.caption2).foregroundStyle(.secondary)
+            Text(value).font(.subheadline.weight(.semibold).monospacedDigit())
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

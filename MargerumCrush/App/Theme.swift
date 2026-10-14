@@ -154,23 +154,34 @@ enum Art {
     static let vineyard = image("Vineyard")
     static let wasp = image("Wasp")
     static let floor = image("WineryFloor")
-    private static let clusterRed = image("ClusterRed")
-    private static let clusterRedUnripe = image("ClusterRedUnripe")
-    private static let clusterWhite = image("ClusterWhite")
-    private static let clusterWhiteUnripe = image("ClusterWhiteUnripe")
-    private static let clusterRotten = image("ClusterRotten")
-    private static let clusterGolden = image("ClusterGolden")
+    private static let clusters: [String: UIImage] = {
+        var images: [String: UIImage] = [:]
+        for name in ["ClusterRed", "ClusterWhite", "ClusterRedGreenStem", "ClusterWhiteGreenStem", "ClusterRedShaded",
+                     "ClusterWhiteShaded", "ClusterWing", "ClusterRedShot", "ClusterWhiteShot", "ClusterRedRaisin",
+                     "ClusterWhiteRaisin", "ClusterRotten", "ClusterSour", "ClusterGolden", "Leaf", "Cane"] {
+            images[name] = image(name)
+        }
+        return images
+    }()
     private static let labelSybarite = image("LabelSybarite")
     private static let labelRose = image("LabelRose")
     private static let labelM5 = image("LabelM5")
     private static let labelUber = image("LabelUber")
 
     static func cluster(_ kind: PickingRound.Kind, red: Bool) -> UIImage? {
+        let color = red ? "Red" : "White"
         switch kind {
-        case .ripe: red ? clusterRed : clusterWhite
-        case .unripe: red ? clusterRedUnripe : clusterWhiteUnripe
-        case .rotten: clusterRotten
-        case .golden: clusterGolden
+        case .ripe: return clusters["Cluster" + color]
+        case .greenStem: return clusters["Cluster\(color)GreenStem"]
+        case .shaded: return clusters["Cluster\(color)Shaded"]
+        case .wing: return clusters["ClusterWing"]
+        case .shot: return clusters["Cluster\(color)Shot"]
+        case .raisined: return clusters["Cluster\(color)Raisin"]
+        case .rotten: return clusters["ClusterRotten"]
+        case .sour: return clusters["ClusterSour"]
+        case .golden: return clusters["ClusterGolden"]
+        case .leaf: return clusters["Leaf"]
+        case .cane: return clusters["Cane"]
         }
     }
 
@@ -227,20 +238,30 @@ enum Art {
 }
 
 extension PickingRound.Kind {
-    /// Berry color for the drawn clusters.
+    /// Berry color for the drawn bunches.
     func color(for varietal: Varietal) -> Color {
         let ripe = varietal.berryColor
+        let green = RGB(0.40, 0.66, 0.22)
         switch self {
-        case .ripe:
+        case .ripe, .greenStem, .shot:
             return Color(ripe)
-        case .unripe:
-            // Still green, with a blush of color on red grapes.
-            let green = RGB(0.40, 0.66, 0.22)
-            return Color(varietal.isRed ? green.mixed(with: ripe, 0.3) : green)
+        case .shaded:
+            // Paler, with green coming through.
+            return Color(varietal.isRed ? green.mixed(with: ripe, 0.4) : green.mixed(with: ripe, 0.6))
+        case .wing:
+            return Color(green)
+        case .raisined:
+            return Color(ripe.mixed(with: RGB(0.35, 0.22, 0.12), 0.6))
         case .rotten:
             return Color(red: 0.47, green: 0.42, blue: 0.37)
+        case .sour:
+            return Color(red: 0.55, green: 0.38, blue: 0.22)
         case .golden:
             return Color(red: 0.97, green: 0.78, blue: 0.22)
+        case .leaf:
+            return Theme.leaf
+        case .cane:
+            return Theme.stem
         }
     }
 }

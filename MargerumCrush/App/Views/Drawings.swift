@@ -70,7 +70,8 @@ struct GrapeCluster: View {
     }
 }
 
-/// A cluster in the picking game: the artwork if there is some, else drawn.
+/// A bunch (or a leaf, or a cane) in the picking game: the artwork if there
+/// is some, else drawn.
 struct ClusterSprite: View {
     let kind: PickingRound.Kind
     let varietal: Varietal
@@ -78,8 +79,15 @@ struct ClusterSprite: View {
     var body: some View {
         if let image = Art.cluster(kind, red: varietal.isRed) {
             Image(uiImage: image).resizable().scaledToFit()
+        } else if kind == .leaf || kind == .cane {
+            Image(systemName: kind == .leaf ? "leaf.fill" : "line.diagonal")
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(kind.color(for: varietal))
+                .padding(8)
         } else {
-            GrapeCluster(color: kind.color(for: varietal), mold: kind == .rotten, sparkle: kind == .golden)
+            GrapeCluster(color: kind.color(for: varietal), mold: kind == .rotten || kind == .sour, sparkle: kind == .golden)
+                .scaleEffect(kind == .wing ? 0.7 : 1, anchor: .top)
         }
     }
 }

@@ -1,8 +1,9 @@
 import CrushKit
 import SwiftUI
 
-/// The picking game itself: three trellis wires, bunches popping up on
-/// them, and the odd wasp. `PickFlowView` runs the clock.
+/// The picking game itself: three trellis wires, bunches popping up on them,
+/// the odd leaf and cane, and wasps. The bins' sugar, acid, tannin, green
+/// character and complexity move with every pick. `PickFlowView` runs the clock.
 struct MiniGameView: View {
     @Binding var round: PickingRound
     let varietal: Varietal
@@ -34,13 +35,32 @@ struct MiniGameView: View {
         .sensoryFeedback(.error, trigger: badPicks)
     }
 
-    private var goodPicks: Int { round.tally.ripe + round.tally.golden }
-    private var badPicks: Int { round.tally.unripe + round.tally.rotten + round.tally.stings }
+    private var goodPicks: Int {
+        round.bin.count(.ripe) + round.bin.count(.shot) + round.bin.count(.golden)
+    }
+
+    private var badPicks: Int {
+        [PickingRound.Kind.rotten, .sour, .leaf, .cane, .wing].reduce(round.stings) { $0 + round.bin.count($1) }
+    }
 
     private var hud: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             scoreboard
-            // How much of the crop is in: three bunches in four is all of it.
+            HStack(spacing: 12) {
+                Meter(title: "Sugar", value: round.brix,
+                      range: (round.window.lowerBound - 3)...(round.window.upperBound + 3), good: round.window,
+                      text: "\(Format.one(round.brix))°")
+                Meter(title: "Acid", value: round.acid, range: (round.idealAcid - 3)...(round.idealAcid + 3),
+                      good: (round.idealAcid - 0.9)...(round.idealAcid + 0.9), text: "\(Format.one(round.acid)) g/L")
+            }
+            HStack(spacing: 6) {
+                chip("Tannin", signed(round.bin.weight > 0 ? round.bin.tannin - round.expected.tannin : 0))
+                chip("Green", round.bin.weight > 0 ? Format.one(round.bin.green) : "–",
+                     warn: round.bin.green > (varietal.isRed ? 0.45 : 0.7))
+                chip("Complexity", round.bin.weight > 0 ? Format.one(round.bin.complexity) : "–")
+                chip("Leaves", String(round.bin.mog), warn: round.bin.mog > 1)
+            }
+            // How much of the crop is in.
             HStack(spacing: 8) {
                 Text("Crop").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                 ProgressView(value: round.harvestedShare).tint(Theme.leaf)
@@ -53,6 +73,22 @@ struct MiniGameView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(.ultraThinMaterial)
+    }
+
+    private func signed(_ value: Double) -> String {
+        abs(value) < 0.05 ? "0" : (value > 0 ? "+" : "−") + Format.one(abs(value))
+    }
+
+    private func chip(_ title: String, _ value: String, warn: Bool = false) -> some View {
+        VStack(spacing: 0) {
+            Text(title.uppercased()).font(.system(size: 8, weight: .bold)).tracking(0.6).foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.bold).monospacedDigit())
+                .foregroundStyle(warn ? Theme.wine : Theme.ink)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 3)
+        .background(Color.white.opacity(0.45), in: .rect(cornerRadius: 8))
     }
 
     private var scoreboard: some View {
@@ -75,13 +111,11 @@ struct MiniGameView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 0) {
-                Text(String(round.points))
+                Text(String(round.bin.bunches))
                     .font(.title2.weight(.bold))
                     .monospacedDigit()
                     .foregroundStyle(Theme.ink)
-                Text(round.multiplier > 1 ? "×\(round.multiplier) streak" : "\(round.tally.picked) picked")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(round.multiplier > 1 ? Theme.gold : Color.secondary)
+                Text("in the bins").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
             .frame(minWidth: 80, alignment: .trailing)
         }
@@ -101,7 +135,7 @@ struct MiniGameView: View {
             .contentShape(Rectangle())
             .onTapGesture { round.pick(cluster.id) }
             .position(x: x, y: y)
-            .accessibilityLabel(label(for: cluster.kind))
+            .accessibilityLabel(cluster.kind.name)
             .accessibilityAddTraits(.isButton)
     }
 
@@ -123,9 +157,10 @@ struct MiniGameView: View {
     private func popupView(_ popup: PickingRound.Popup, in size: CGSize) -> some View {
         let age = round.time - popup.born
         return Text(popup.text)
-            .font(.system(size: popup.tone == .bonus ? 22 : 18, weight: .heavy, design: .rounded))
+            .font(.system(size: popup.tone == .bonus ? 20 : 17, weight: .heavy, design: .rounded))
             .foregroundStyle(color(popup.tone))
             .shadow(color: .black.opacity(0.6), radius: 2)
+            .fixedSize()
             .opacity(max(0, 1 - age / 0.9))
             .position(x: size.width * CGFloat(popup.x), y: size.height * CGFloat(popup.y) + 40 - CGFloat(age) * 60)
             .allowsHitTesting(false)
@@ -136,15 +171,7 @@ struct MiniGameView: View {
         case .good: .white
         case .bonus: Color(red: 1, green: 0.85, blue: 0.3)
         case .bad: Color(red: 1, green: 0.45, blue: 0.4)
-        }
-    }
-
-    private func label(for kind: PickingRound.Kind) -> String {
-        switch kind {
-        case .ripe: "Ripe bunch"
-        case .unripe: "Green bunch"
-        case .rotten: "Moldy bunch"
-        case .golden: "Perfect bunch"
+        case .info: Color(red: 0.75, green: 0.9, blue: 1)
         }
     }
 }
