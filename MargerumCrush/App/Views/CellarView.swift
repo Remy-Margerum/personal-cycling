@@ -228,7 +228,8 @@ struct LotRow: View {
                     Image(systemName: "ellipsis.circle").font(.title3)
                 }
                 .tint(Theme.ink)
-                .accessibilityLabel("More for \(lot.name)")
+                .accessibilityLabel("Sell in bulk")
+                .accessibilityValue(lot.name)
             }
         }
         .card()

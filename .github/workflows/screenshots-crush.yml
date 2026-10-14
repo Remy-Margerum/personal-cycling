@@ -81,6 +81,9 @@ jobs:
           for attachment in walk(manifest):
               name = attachment["suggestedHumanReadableName"]
               name = re.sub(r"_\d+_[0-9A-Fa-f-]+(\.\w+)$", r"\1", name)
+              # upload-artifact refuses some characters (quotes in XCTest's
+              # "Debug description for `"Button"`" files, for one).
+              name = re.sub(r'[\\"*:<>|?\r\n]', "", name)
               os.rename(os.path.join(out, attachment["exportedFileName"]), os.path.join(out, name))
           EOF
           ls -l "$out"
