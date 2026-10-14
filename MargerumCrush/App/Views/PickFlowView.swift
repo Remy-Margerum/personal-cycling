@@ -44,7 +44,7 @@ struct PickFlowView: View {
                 }
             case .crush:
                 if let harvest {
-                    CrushPadView(harvest: harvest) { dismiss() }
+                    CrushFlowView(harvest: harvest) { dismiss() }
                 }
             }
         }

@@ -51,9 +51,9 @@ struct HarvestSection: View {
         .fullScreenCover(item: $request) { request in
             PickFlowView(request: request)
         }
-        .sheet(isPresented: $finishingCrush) {
+        .fullScreenCover(isPresented: $finishingCrush) {
             if let harvest = store.game?.crushPad {
-                CrushPadView(harvest: harvest) { finishingCrush = false }
+                CrushFlowView(harvest: harvest) { finishingCrush = false }
             }
         }
         .confirmationDialog("End the harvest now?", isPresented: $confirmEnd, titleVisibility: .visible) {

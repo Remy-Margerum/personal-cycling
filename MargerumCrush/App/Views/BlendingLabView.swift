@@ -34,13 +34,15 @@ struct BlendingLabView: View {
         let spec = wine.spec
         let lots = game.lots(for: wine)
         let analysis = game.analyze(Blend(wine: wine, cases: cases))
+        let nextMonth = game.monthsLeft > 0 ? game.analyze(Blend(wine: wine, cases: cases), monthsAhead: 1) : nil
         return ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text(spec.blurb)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
-                BlendPreview(wine: wine, vintage: game.vintage, analysis: analysis)
+                BlendPreview(wine: wine, vintage: game.vintage, analysis: analysis, month: Aging.name(game.cellarMonth),
+                             nextMonth: nextMonth)
                 ProfileChart(profile: analysis.profile, target: spec.target, empty: analysis.cases == 0)
                 if !analysis.composition.isEmpty {
                     CompositionBar(composition: analysis.composition)
@@ -72,7 +74,7 @@ struct BlendingLabView: View {
             Button {
                 review = store.play { $0.bottle(Blend(wine: wine, cases: cases)) } ?? nil
             } label: {
-                Text(analysis.canBottle ? "Bottle \(analysis.cases) cases" : "Bottle it")
+                Text(analysis.canBottle ? "Bottle \(analysis.cases) cases in \(Aging.name(game.cellarMonth))" : "Bottle it")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -95,18 +97,21 @@ struct BlendingLabView: View {
     }
 }
 
-/// The bottle, its color and the winemaker's estimate.
+/// The bottle, its color and the winemaker's estimate, now and next month.
 struct BlendPreview: View {
     let wine: WineID
     let vintage: Int
     let analysis: BlendAnalysis
+    var month: String?
+    /// The same blend a month on, while there's time to wait.
+    var nextMonth: BlendAnalysis?
 
     var body: some View {
         HStack(spacing: 18) {
             BottleView(wine: wine, vintage: vintage, color: analysis.cases > 0 ? analysis.color : RGB(0.86, 0.86, 0.86))
                 .frame(height: 150)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Your estimate").font(.caption).foregroundStyle(.secondary)
+                Text(month.map { "Your estimate in \($0)" } ?? "Your estimate").font(.caption).foregroundStyle(.secondary)
                 if analysis.cases > 0 {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(String(analysis.score))
@@ -120,6 +125,12 @@ struct BlendPreview: View {
                     Text("\(analysis.cases) cases · \(Format.one(analysis.alcohol))% alcohol")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if let next = nextMonth, next.cases > 0 {
+                        let change = next.score - analysis.score
+                        Text("A month from now: \(next.score)" + (change > 0 ? " (+\(change))" : change < 0 ? " (\(change))" : ""))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(change > 0 ? Theme.leaf : change < 0 ? Theme.wine : Color.secondary)
+                    }
                     Text("The critic may land a point either side.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -135,7 +146,7 @@ struct BlendPreview: View {
     }
 }
 
-/// The blend's taste against the style the critic expects (the gold bands).
+/// The blend's taste against Doug's range for the wine (the gold bands).
 struct ProfileChart: View {
     let profile: TasteProfile
     let target: [TasteProfile.Dimension: ClosedRange<Double>]
@@ -147,7 +158,7 @@ struct ProfileChart: View {
                 Text("Taste").font(.headline)
                 Spacer()
                 Capsule().fill(Theme.gold.opacity(0.45)).frame(width: 22, height: 8)
-                Text("the critic's style").font(.caption).foregroundStyle(.secondary)
+                Text("Doug's range").font(.caption).foregroundStyle(.secondary)
             }
             ForEach(TasteProfile.Dimension.allCases) { dimension in
                 ProfileRow(name: dimension.name, value: profile[dimension], target: target[dimension], empty: empty)

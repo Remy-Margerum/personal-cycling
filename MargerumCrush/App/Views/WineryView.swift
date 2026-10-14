@@ -72,8 +72,8 @@ struct WineryHeader: View {
     private var subtitle: String {
         switch game.phase {
         case .harvest: "Harvest · \(game.date) · week \(game.week + 1) of \(HarvestCalendar.weeks)"
-        case .cellar: "In the cellar · time to blend"
-        case .offseason: "Winter · the wine is out"
+        case .cellar: "In the cellar · \(Aging.name(game.cellarMonth)) \(String(game.cellarMonth >= 2 ? game.vintage + 1 : game.vintage))"
+        case .offseason: "Between vintages · the wine is out"
         }
     }
 }

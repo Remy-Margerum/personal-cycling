@@ -16,7 +16,8 @@ public enum WineID: String, Codable, CaseIterable, Sendable, Identifiable {
     }
 }
 
-/// What a wine has to be, and the style the critic expects of it.
+/// What a wine has to be, and Doug's range for it: the style he makes it in,
+/// which is what the critic rewards.
 public struct WineSpec: Sendable {
     enum Rule: Sendable {
         /// At least this share of one grape (75% is the legal minimum for
@@ -37,7 +38,7 @@ public struct WineSpec: Sendable {
     /// Shelf price per bottle for a 90-point wine.
     public let price: Double
     public let blurb: String
-    /// The style the critic is looking for.
+    /// Doug's range: where each dimension of the taste should land.
     public let target: [TasteProfile.Dimension: ClosedRange<Double>]
     let rule: Rule
 

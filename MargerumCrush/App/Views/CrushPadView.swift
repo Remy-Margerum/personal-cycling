@@ -1,7 +1,8 @@
 import CrushKit
 import SwiftUI
 
-/// What to make of the fruit: red or saignée, and which vessel.
+/// The cellar crew makes the wine: pick red or saignée and the vessel, and
+/// they do the rest. Decent, never inspired: Doug does better on the floor.
 struct CrushPadView: View {
     @Environment(GameStore.self) private var store
     let harvest: Harvest
@@ -52,14 +53,14 @@ struct CrushPadView: View {
                 .padding(16)
             }
             .background(Theme.paper)
-            .navigationTitle("Crush pad")
+            .navigationTitle("The cellar crew")
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {
                 Button {
                     store.play { $0.crush(in: vessel, method: method) }
                     done()
                 } label: {
-                    Text("Into the cellar").frame(maxWidth: .infinity)
+                    Text("The crew makes it").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)

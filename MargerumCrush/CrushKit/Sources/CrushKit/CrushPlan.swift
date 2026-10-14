@@ -113,13 +113,18 @@ extension Winemaking {
     /// played out at once.
     public static func played(_ harvest: Harvest, vessels: [Vessel], plan: CrushPlan) -> Winemaking {
         var w = Winemaking(harvest: harvest, vessels: vessels)
+        w.finish(with: plan)
+        return w
+    }
+
+    /// Hands the rest of the crush to the crew: plays it out at once.
+    public mutating func finish(with plan: CrushPlan) {
         var steps = 0
-        while !w.isFinished && steps < 50_000 {
-            if let action = w.plan(plan) { w.perform(action) }
-            w.advance(by: 0.1)
+        while !isFinished && steps < 50_000 {
+            if let action = self.plan(plan) { perform(action) }
+            advance(by: 0.1)
             steps += 1
         }
-        return w
     }
 
     private func plan(_ plan: CrushPlan) -> Action? {

@@ -362,7 +362,20 @@ struct WineLabel: View {
 
     var body: some View {
         if let image = Art.label(wine) {
+            // The real label, with the vintage spelled out across the top.
             Image(uiImage: image).resizable().scaledToFill()
+                .overlay {
+                    GeometryReader { geo in
+                        Text(Format.vintageWords(vintage))
+                            .font(.system(size: max(1, geo.size.height * 0.026), weight: .medium, design: .serif))
+                            .tracking(geo.size.height * 0.006)
+                            .foregroundStyle(Color(white: 0.18))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.3)
+                            .frame(width: geo.size.width * 0.82)
+                            .position(x: geo.size.width / 2, y: geo.size.height * 0.14)
+                    }
+                }
         } else {
             VStack(spacing: 2 * scale) {
                 Text("MARGERUM")

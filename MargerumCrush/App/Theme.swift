@@ -64,6 +64,30 @@ enum Format {
     static func one(_ value: Double) -> String { String(format: "%.1f", value) }
 
     static func percent(_ share: Double) -> String { "\(Int((share * 100).rounded()))%" }
+
+    /// "TWO THOUSAND AND ONE", the way Margerum labels spell out the vintage.
+    static func vintageWords(_ year: Int) -> String {
+        let ones = ["", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "ELEVEN",
+                    "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN"]
+        let tens = ["", "", "TWENTY", "THIRTY", "FORTY", "FIFTY", "SIXTY", "SEVENTY", "EIGHTY", "NINETY"]
+        func words(_ n: Int) -> String {
+            var parts: [String] = []
+            if n >= 100 { parts.append("\(ones[n / 100]) HUNDRED") }
+            let rest = n % 100
+            if rest >= 20 {
+                parts.append(tens[rest / 10] + (rest % 10 > 0 ? " \(ones[rest % 10])" : ""))
+            } else if rest > 0 {
+                parts.append(ones[rest])
+            }
+            return parts.joined(separator: " AND ")
+        }
+        guard year > 0, year < 10_000 else { return String(year) }
+        let thousands = year / 1000
+        let rest = year % 1000
+        let head = thousands > 0 ? "\(ones[thousands]) THOUSAND" : ""
+        if rest == 0 { return head }
+        return head.isEmpty ? words(rest) : "\(head) AND \(words(rest))"
+    }
 }
 
 /// Reputation as five stars.
@@ -117,22 +141,29 @@ struct ScoreBadge: View {
     }
 }
 
-/// Optional artwork. A PNG with one of these names anywhere under App/
-/// (App/Art is the place) replaces the drawn version; see App/Art/README.md.
+/// Optional artwork. A PNG (or, for the big backdrops, a JPEG) with one of
+/// these names anywhere under App/ (App/Art is the place) replaces the drawn
+/// version; see App/Art/README.md.
 enum Art {
-    static let title = UIImage(named: "Title")
-    static let vineyard = UIImage(named: "Vineyard")
-    static let wasp = UIImage(named: "Wasp")
-    private static let clusterRed = UIImage(named: "ClusterRed")
-    private static let clusterRedUnripe = UIImage(named: "ClusterRedUnripe")
-    private static let clusterWhite = UIImage(named: "ClusterWhite")
-    private static let clusterWhiteUnripe = UIImage(named: "ClusterWhiteUnripe")
-    private static let clusterRotten = UIImage(named: "ClusterRotten")
-    private static let clusterGolden = UIImage(named: "ClusterGolden")
-    private static let labelSybarite = UIImage(named: "LabelSybarite")
-    private static let labelRose = UIImage(named: "LabelRose")
-    private static let labelM5 = UIImage(named: "LabelM5")
-    private static let labelUber = UIImage(named: "LabelUber")
+    /// "Title" finds Title.png, or failing that Title.jpg.
+    static func image(_ name: String) -> UIImage? {
+        UIImage(named: name) ?? UIImage(named: name + ".jpg")
+    }
+
+    static let title = image("Title")
+    static let vineyard = image("Vineyard")
+    static let wasp = image("Wasp")
+    static let floor = image("WineryFloor")
+    private static let clusterRed = image("ClusterRed")
+    private static let clusterRedUnripe = image("ClusterRedUnripe")
+    private static let clusterWhite = image("ClusterWhite")
+    private static let clusterWhiteUnripe = image("ClusterWhiteUnripe")
+    private static let clusterRotten = image("ClusterRotten")
+    private static let clusterGolden = image("ClusterGolden")
+    private static let labelSybarite = image("LabelSybarite")
+    private static let labelRose = image("LabelRose")
+    private static let labelM5 = image("LabelM5")
+    private static let labelUber = image("LabelUber")
 
     static func cluster(_ kind: PickingRound.Kind, red: Bool) -> UIImage? {
         switch kind {
@@ -149,6 +180,48 @@ enum Art {
         case .rose: labelRose
         case .m5: labelM5
         case .uber: labelUber
+        }
+    }
+
+    private static let stations: [StationID: UIImage] = {
+        var images: [StationID: UIImage] = [:]
+        let names: [StationID: String] = [
+            .bins: "Bins", .destemmer: "Destemmer", .press: "Press", .fermenter: "Fermenter",
+            .steelTank: "SteelTank", .barrels: "Barrels", .newBarrels: "NewBarrels", .chiller: "Chiller", .lab: "LabBench",
+        ]
+        for (id, name) in names { images[id] = image(name) }
+        return images
+    }()
+
+    static func station(_ id: StationID) -> UIImage? { stations[id] }
+
+    private static let doug: [String: UIImage] = {
+        var images: [String: UIImage] = [:]
+        for view in ["Front", "Side", "Back"] {
+            for frame in ["", "Walk1", "Walk2"] {
+                images[view + frame] = image("Doug" + view + frame)
+            }
+        }
+        for pose in ["Punch", "Valve", "Taste"] { images[pose] = image("Doug" + pose) }
+        return images
+    }()
+
+    /// Doug facing a way, mid-stride (frame 1 or 2) or standing (0).
+    static func doug(_ facing: Doug.Facing, frame: Int) -> UIImage? {
+        let view: String
+        switch facing {
+        case .down: view = "Front"
+        case .up: view = "Back"
+        case .left, .right: view = "Side"
+        }
+        return doug[view + (frame == 0 ? "" : "Walk\(frame)")]
+    }
+
+    static func doug(_ pose: Winemaking.Pose) -> UIImage? {
+        switch pose {
+        case .punch: doug["Punch"]
+        case .valve: doug["Valve"]
+        case .taste: doug["Taste"]
         }
     }
 }
