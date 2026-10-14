@@ -94,6 +94,22 @@ struct WinemakingView: View {
             Joystick(stick: $stick)
             Spacer(minLength: 0)
             VStack(spacing: 8) {
+                if let other = otherAction {
+                    Button {
+                        session.act(other)
+                    } label: {
+                        Label(other.name, systemImage: symbol(other))
+                            .font(.caption.weight(.bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Theme.gold, in: Capsule())
+                            .foregroundStyle(Theme.ink)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: 170)
+                }
                 actionButton
                 if let station = session.station {
                     Text(station.name)
@@ -141,9 +157,17 @@ struct WinemakingView: View {
         .accessibilityLabel(action?.name ?? "Nothing to do here")
     }
 
+    /// A second job at this machine, if it has one: whole clusters at the
+    /// destemmer.
+    private var otherAction: Winemaking.Action? {
+        guard session.busy <= 0, let station = session.station else { return nil }
+        return session.actions(at: station).dropFirst().first
+    }
+
     private func symbol(_ action: Winemaking.Action) -> String {
         switch action {
         case .destem, .crush: "gearshape.2.fill"
+        case .wholeCluster: "leaf.fill"
         case .loadPress, .press: "rectangle.compress.vertical"
         case .cutPress: "stop.fill"
         case .fill: "arrow.down.to.line"
@@ -294,10 +318,7 @@ struct CrushHUD: View {
     }
 
     /// White: juice so far, as a share of the usual.
-    private var pressYield: Double {
-        let p = session.pressProgress
-        return 0.68 + 0.37 * (1 - (1 - p) * (1 - p))
-    }
+    private var pressYield: Double { Winemaking.pressYield(session.pressProgress) }
 
     private var sinceDry: Double { session.hours - (session.dryAt ?? session.hours) }
 
@@ -335,7 +356,7 @@ struct CrushHUD: View {
             case .pressing:
                 Meter(title: "Press", value: s.pressProgress, range: 0...1, good: 0...s.pressKnee,
                       text: "\(Format.one(s.pressProgress * 2)) bar")
-                Meter(title: "Juice", value: pressYield, range: 0.6...1.05, good: 0.6...1.05, text: Format.percent(pressYield))
+                Meter(title: "Juice", value: pressYield, range: 0...1.05, good: 0.55...1.05, text: Format.percent(pressYield))
             case .skinContact:
                 Meter(title: "Color", value: s.color, range: 0...0.7, good: Winemaking.pink, text: "\(Int(s.hours.rounded())) h",
                       tint: Color(s.harvest.varietal.roseColor(s.color)))

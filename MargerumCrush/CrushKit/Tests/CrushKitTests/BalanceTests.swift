@@ -27,7 +27,7 @@ struct Bot {
     private(set) var profits: [Double] = []
 
     static let casual = Bot(skill: 0.75, mistakes: 0.2, reaction: 0.7, patient: false, picking: .everything,
-                            crush: nil, bottling: .month(3), topping: 2)
+                            crush: nil, bottling: .month(4), topping: 2)
     static let expert = Bot(skill: 0.95, mistakes: 0.03, reaction: 0.45, patient: true, picking: .smart,
                             crush: 1, bottling: .best, topping: 1)
 

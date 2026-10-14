@@ -33,16 +33,23 @@ final class AgingTests: XCTestCase {
         XCTAssertTrue((0...Aging.last).allSatisfy { steel.taste(in: $0).oak == 0 })
     }
 
-    func testWhitesAndRoseAreBestYoungAndUberWantsItsOak() {
+    func testWinesBottledTooSoonTasteRaw() {
         func score(_ wine: WineSpec, _ made: Lot, after months: Int) -> Int {
             wine.analyze([(made.aged(by: months), 100)]).score
         }
+        // Whites and rosé want a couple of months to settle...
         let sybarite = harvest(.sauvignonBlanc).lots(vessel: .stainless, method: .red)[0]
-        XCTAssertGreaterThan(score(.sybarite, sybarite, after: 2), score(.sybarite, sybarite, after: Aging.last))
+        XCTAssertEqual(score(.sybarite, sybarite, after: 0), score(.sybarite, sybarite, after: 2) - 2)
+        XCTAssertEqual(WineSpec.sybarite.analyze([(sybarite, 100)]).young, 2)
+        // ...and the rosé fades by summer.
         let rose = harvest(.grenache, style: .rose).lots(vessel: .stainless, method: .red)[0]
-        XCTAssertLessThan(rose.taste(in: Aging.last).fruit, rose.taste(in: 1).fruit - 1)
+        XCTAssertLessThan(rose.taste(in: Aging.last).fruit, rose.taste(in: 2).fruit - 1)
+        // ÜBER wants its months in new oak.
         let uber = harvest(.syrah, brix: 25.5).lots(vessel: .newOak, method: .red)[0]
-        XCTAssertGreaterThan(score(.uber, uber, after: 4), score(.uber, uber, after: 0) + 2)
+        XCTAssertGreaterThan(score(.uber, uber, after: 5), score(.uber, uber, after: 0) + 4)
+        XCTAssertEqual(Aging.youth(.red, months: 0), 3, accuracy: 1e-9)
+        XCTAssertEqual(Aging.youth(.red, months: 5), 0)
+        XCTAssertEqual(Aging.youth(.rose, months: 1), 1)
     }
 
     func testBarrelsNeedToppingUp() {

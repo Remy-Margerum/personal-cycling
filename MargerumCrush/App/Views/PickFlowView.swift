@@ -179,7 +179,7 @@ struct BriefingView: View {
         let brix = round.baseBrix
         var lines: [String] = []
         if brix < round.window.lowerBound - 0.3 {
-            lines.append("It's early: the block is under the window. Skip shaded, wing and green-stemmed bunches and "
+            lines.append("It's early: the block is under the window. Skip shaded, second-crop and green-stemmed bunches and "
                          + "the bins come in riper; sunny and raisined ones push it up.")
         } else if brix > round.window.upperBound + 0.3 {
             lines.append("It's late: the block is over the window. A few shaded bunches bring the sugar down and the "
@@ -198,16 +198,16 @@ struct BriefingView: View {
 
     private func effect(_ kind: PickingRound.Kind) -> String {
         switch kind {
-        case .ripe: "The good stuff. Sugar, color, ripe tannin."
-        case .greenStem: "Not really ripe: green, bitter edges."
+        case .ripe: "Sunny, on a brown stem: sugar, color, ripe tannin."
+        case .greenStem: "Not really ripe: stalky and green. No good for whole clusters."
         case .shaded: "Less sugar, more acid, green notes."
-        case .wing: "Hard and sour. Leave it."
-        case .shot: "Small berries: tannin, color, complexity."
-        case .raisined: "Lots of sugar, little acid. Jammy."
-        case .rotten: "Gray mold: musty. Leave it."
+        case .secondCrop: "Weeks behind: hard, sour and green. Leave it."
+        case .shot: "Small, sweet berries: color, tannin, complexity."
+        case .raisined: "Lots of sugar, less acid and color. Jammy."
+        case .rotten: "Gray mold: musty, and it eats the color. Leave it."
         case .sour: "Sour rot: vinegar. Leave it."
         case .golden: "Perfect. Complexity. Grab it."
-        case .leaf: "Bitter and leafy. Don't grab it."
+        case .leaf: "Bitter, leafy and green. Two in the bins and it shows."
         case .cane: "Woody and bitter. Don't grab it."
         }
     }

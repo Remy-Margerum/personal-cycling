@@ -24,11 +24,13 @@ public enum Varietal: String, Codable, CaseIterable, Sendable, Identifiable {
     /// The style it's normally grown for.
     public var mainStyle: WineStyle { isRed ? .red : .white }
 
-    /// Sugar (°Brix) at which to pick for a style.
+    /// Sugar (°Brix) at which to pick for a style. Doug picks Sybarite "just
+    /// approaching ripeness", for about 12.5% alcohol, and the rosé earlier
+    /// still.
     public func window(for style: WineStyle) -> ClosedRange<Double> {
-        if style == .rose { return 20.5...22.5 }
+        if style == .rose { return 20.0...22.0 }
         switch self {
-        case .sauvignonBlanc: return 21.5...23.5
+        case .sauvignonBlanc: return 21.0...23.0
         case .grenache: return 23.5...25.5
         case .syrah: return 24.0...26.0
         case .mourvedre: return 24.0...26.0

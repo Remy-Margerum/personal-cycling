@@ -31,6 +31,12 @@ public struct CrushPlan: Sendable {
         switch w.stage {
         case .waiting:
             guard lookahead || w.hours >= 1 + 6 * slack else { return nil }
+            // Only Doug at his best trusts the stems: whole clusters for Syrah
+            // and Grenache when they're brown.
+            if style == .red && skill >= 0.8 && [Varietal.syrah, .grenache].contains(w.harvest.varietal)
+                && w.harvest.greenStems < 0.2 {
+                return .wholeCluster
+            }
             return w.actions.first
         case .skinContact:
             let target = Winemaking.pink.middle + 0.12 * slack
@@ -137,8 +143,8 @@ extension Winemaking {
     public mutating func autopilot(_ plan: CrushPlan) {
         guard busy <= 0, !isFinished else { return }
         if let action = plan.next(self), actions.contains(action) {
-            if station == action.station && availableAction == action {
-                act()
+            if station == action.station {
+                act(action)
             } else if destination != action.station {
                 walk(to: action.station)
             }

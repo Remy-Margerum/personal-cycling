@@ -79,6 +79,32 @@ final class WinemakingTests: XCTestCase {
         XCTAssertNil(w.act(), "busy")
     }
 
+    func testWholeClustersWantBrownStems() throws {
+        func made(_ bunches: [PickingRound.Kind: Int], whole: Bool) -> WinemakingResult {
+            var fruit = harvest(.syrah)
+            fruit.picking = PickingRound.Summary(bin: PickingRound.Bin(bunches), harvestedShare: 1, missed: 0, stings: 0)
+            var w = Winemaking(harvest: fruit)
+            w.walk(to: .destemmer)
+            for _ in 0..<300 where w.destination != nil { w.advance(by: 1.0 / 30) }
+            XCTAssertEqual(w.actions(at: .destemmer), [.destem, .wholeCluster])
+            XCTAssertEqual(w.act(whole ? .wholeCluster : nil), whole ? .wholeCluster : .destem)
+            w.finish(with: CrushPlan(skill: 1))
+            return w.result
+        }
+        let brown = made([.ripe: 30], whole: true)
+        let destemmed = made([.ripe: 30], whole: false)
+        let green = made([.ripe: 15, .greenStem: 15], whole: true)
+        XCTAssertGreaterThan(brown.quality, destemmed.quality + 2, "\(brown.notes)")
+        XCTAssertGreaterThan(brown.profile.spice, destemmed.profile.spice)
+        XCTAssertGreaterThan(brown.profile.tannin, destemmed.profile.tannin)
+        XCTAssertTrue(green.faults.contains(.stemmy), "stalky")
+        XCTAssertLessThan(green.quality, destemmed.quality)
+        // Only Doug at his best tries it, and only on brown stems.
+        XCTAssertEqual(CrushPlan(skill: 1).next(Winemaking(harvest: harvest(.syrah)), lookahead: true), .wholeCluster)
+        XCTAssertEqual(CrushPlan.crew(saignee: false, vessel: .neutralOak).next(Winemaking(harvest: harvest(.syrah)),
+                                                                               lookahead: true), .destem)
+    }
+
     func testTheClockRunsSlowAtThePressAndFastInTheFerment() {
         var w = Winemaking(harvest: harvest(.sauvignonBlanc))
         w.perform(.loadPress)

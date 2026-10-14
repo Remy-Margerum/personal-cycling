@@ -138,6 +138,16 @@ struct CrushBriefingView: View {
         }
     }
 
+    /// Whether the stems are ripe enough to ferment some bunches whole.
+    private var wholeClusters: String {
+        let green = Format.percent(harvest.greenStems)
+        if harvest.greenStems < 0.2 {
+            return "The stems are brown (\(green) green): keeping a third whole clusters adds spice and structure, "
+                + "most of all to Syrah."
+        }
+        return "\(green) of the fruit is on green stems: whole clusters would taste stalky."
+    }
+
     private struct Step {
         let title: String
         let detail: String
@@ -147,7 +157,8 @@ struct CrushBriefingView: View {
         switch harvest.style {
         case .red:
             return [
-                Step(title: "Destem into the fermenter", detail: "Within \(Int(w.freshFor)) hours, before the fruit warms up."),
+                Step(title: "Destem into the fermenter", detail: "Within \(Int(w.freshFor)) hours, before the fruit warms up. "
+                     + wholeClusters),
                 Step(title: "Saignée, if you like", detail: "Open the bleed valve while the juice is pink, around "
                      + "\(hours(w.pinkHours.lowerBound))–\(hours(w.pinkHours.upperBound)) after destemming. About 20% makes a darker, richer red."),
                 Step(title: "Cold soak, then the yeast", detail: "Add yeast at the lab \(Int(w.yeastWindow.lowerBound))–"

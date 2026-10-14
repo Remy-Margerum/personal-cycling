@@ -92,14 +92,14 @@ public struct Harvest: Codable, Equatable, Sendable {
     /// Shares of the fruit by weight, after any sorting: gray mold and sour rot.
     public var rotShare: Double
     public var sourShare: Double
-    /// Leaves and canes for every bunch.
+    /// Leaves and canes for every bunch (a cane counts as 0.7 of a leaf).
     public var mogShare: Double
     /// Ripe skin tannin, and skin color and fruit, against the block's average
     /// bunch: 0 is average.
     public var tannin: Double
     public var color: Double
-    /// Green, bitter character from green stems, shaded fruit and wing
-    /// clusters: around 0.2 in an ordinary bin.
+    /// Green, bitter character from green stems, shaded fruit and second
+    /// crop: around 0.2 in an ordinary bin.
     public var green: Double
     /// From hens-and-chicks and perfect bunches: around 0.1 in an ordinary bin.
     public var complexity: Double
@@ -122,6 +122,16 @@ public struct Harvest: Codable, Equatable, Sendable {
     /// likes a little grass and lemongrass; the reds don't.
     var greenAllowed: Double { style == .white ? 0.45 : 0.22 }
 
+    /// Green character from the bunches, and from the leaves in the bins.
+    var effectiveGreen: Double { green + 4 * mogShare }
+
+    /// Vinegar (acetic acid, g/L) in the juice from moldy and sour-rot bunches.
+    /// Wineries turn fruit away at about 0.24.
+    public var mustVolatile: Double { rotShare + 2.4 * sourShare }
+
+    /// Share of the fruit on green, unripe stems, for whole clusters.
+    public var greenStems: Double { picking.bin.greenStems }
+
     /// 0...100: picked at the right sugar for its style, clean, and interesting.
     public var quality: Double {
         let window = varietal.window(for: style)
@@ -130,7 +140,8 @@ public struct Harvest: Codable, Equatable, Sendable {
         // Best in the middle of the window, a little less at its edges, and
         // falling fast outside it.
         let ripeness = 100 - 8 * min(off, halfWidth) - 15 * max(0, off - halfWidth)
-        let clean = 100 - 400 * rotShare - 600 * sourShare - 300 * mogShare - 40 * max(0, green - greenAllowed)
+        let clean = 100 - 400 * rotShare - 600 * sourShare - 350 * max(0, mogShare - 0.01)
+            - 40 * max(0, effectiveGreen - greenAllowed)
         let bonus = min(4, 8 * max(0, complexity - 0.05))
         let quality = 0.5 * max(40, ripeness) + 0.5 * max(0, clean) - 11 + site + bonus
         return min(100, max(0, quality))
@@ -138,10 +149,11 @@ public struct Harvest: Codable, Equatable, Sendable {
 
     var faults: [Fault] {
         var faults: [Fault] = []
-        if green > greenAllowed + 0.25 { faults.append(.green) }
-        if rotShare > 0.06 { faults.append(.moldy) }
-        if sourShare > 0.03 { faults.append(.sour) }
-        if mogShare > 0.06 { faults.append(.stemmy) }
+        if effectiveGreen > greenAllowed + 0.25 { faults.append(.green) }
+        // Gray mold shows sooner in delicate whites and rosé.
+        if rotShare > (style == .red ? 0.05 : 0.03) { faults.append(.moldy) }
+        if mustVolatile >= 0.12 { faults.append(.sour) }
+        if mogShare >= 0.04 { faults.append(.stemmy) }
         return faults
     }
 
@@ -160,21 +172,21 @@ public struct Harvest: Codable, Equatable, Sendable {
         // What went into the bins: ripe skins add structure and color...
         p.tannin += 1.2 * tannin
         p.fruit += 0.6 * color
-        // ...green stems and shaded fruit, green, bitter edges (grass and
-        // lemongrass in a Sauvignon Blanc)...
-        let g = green - 0.2
+        // ...green stems and shaded fruit, stalky, bitter edges (grass and
+        // lemongrass in a Sauvignon Blanc, which shows them sooner)...
         if varietal.isRed {
-            p.tannin += 0.5 * g
-            p.spice += 0.6 * g
-            p.fruit -= 0.8 * g
+            let g = effectiveGreen - 0.2
+            p.tannin += 0.8 * g
+            p.spice += 0.2 * g
+            p.fruit -= 1.0 * g
         } else {
+            let g = effectiveGreen - 0.1
             p.spice += 0.9 * g
             p.fruit -= 0.3 * g
         }
         // ...leaves and canes, bitterness...
-        p.tannin += 5 * mogShare
-        p.spice += 3 * mogShare
-        p.fruit -= 6 * mogShare
+        p.tannin += 6 * mogShare
+        p.fruit -= 10 * mogShare
         // ...rot, mustiness and vinegar...
         p.fruit -= 4 * rotShare + 6 * sourShare
         // ...and interesting bunches, depth.

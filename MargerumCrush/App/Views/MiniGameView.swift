@@ -40,7 +40,7 @@ struct MiniGameView: View {
     }
 
     private var badPicks: Int {
-        [PickingRound.Kind.rotten, .sour, .leaf, .cane, .wing].reduce(round.stings) { $0 + round.bin.count($1) }
+        [PickingRound.Kind.rotten, .sour, .leaf, .cane, .secondCrop].reduce(round.stings) { $0 + round.bin.count($1) }
     }
 
     private var hud: some View {

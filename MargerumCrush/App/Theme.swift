@@ -157,7 +157,7 @@ enum Art {
     private static let clusters: [String: UIImage] = {
         var images: [String: UIImage] = [:]
         for name in ["ClusterRed", "ClusterWhite", "ClusterRedGreenStem", "ClusterWhiteGreenStem", "ClusterRedShaded",
-                     "ClusterWhiteShaded", "ClusterWing", "ClusterRedShot", "ClusterWhiteShot", "ClusterRedRaisin",
+                     "ClusterWhiteShaded", "ClusterSecondCrop", "ClusterRedShot", "ClusterWhiteShot", "ClusterRedRaisin",
                      "ClusterWhiteRaisin", "ClusterRotten", "ClusterSour", "ClusterGolden", "Leaf", "Cane"] {
             images[name] = image(name)
         }
@@ -174,7 +174,7 @@ enum Art {
         case .ripe: return clusters["Cluster" + color]
         case .greenStem: return clusters["Cluster\(color)GreenStem"]
         case .shaded: return clusters["Cluster\(color)Shaded"]
-        case .wing: return clusters["ClusterWing"]
+        case .secondCrop: return clusters["ClusterSecondCrop"]
         case .shot: return clusters["Cluster\(color)Shot"]
         case .raisined: return clusters["Cluster\(color)Raisin"]
         case .rotten: return clusters["ClusterRotten"]
@@ -248,7 +248,7 @@ extension PickingRound.Kind {
         case .shaded:
             // Paler, with green coming through.
             return Color(varietal.isRed ? green.mixed(with: ripe, 0.4) : green.mixed(with: ripe, 0.6))
-        case .wing:
+        case .secondCrop:
             return Color(green)
         case .raisined:
             return Color(ripe.mixed(with: RGB(0.35, 0.22, 0.12), 0.6))

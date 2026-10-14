@@ -2,11 +2,16 @@ import Foundation
 
 /// The picking mini-game. Bunches pop up on the vines for a moment, and every
 /// one is different: sunny and ripe on a brown stem, shaded and tart, a
-/// green-stemmed one that isn't really ripe, a tiny second-crop wing, a
-/// concentrated hens-and-chicks bunch, a raisined one from the sunny side,
-/// gray mold, sour rot. Whatever goes into the bins makes the wine: its sugar,
-/// acid, tannin, green character and complexity. Leaves and canes get grabbed
-/// too, and make it bitter. Don't swat the wasps.
+/// green-stemmed one that isn't really ripe, a small second-crop bunch weeks
+/// behind the rest, a concentrated hens-and-chicks bunch, a raisined one from
+/// the sunny side, gray mold, sour rot. Whatever goes into the bins makes the
+/// wine: its sugar, acid, tannin, green character and complexity. Leaves and
+/// canes get grabbed too, and make it bitter. Don't swat the wasps.
+///
+/// The numbers follow viticulture research: shaded fruit runs 1–2 °Brix lower
+/// and 1–2 g/L higher in acid, second crop sets 6–8 weeks late, hens and
+/// chicks are sweeter with more skin, raisins concentrate sugar while heat
+/// burns color, gray mold adds sugar and earthiness, and sour rot is vinegar.
 ///
 /// The view advances the clock, so a round plays out the same way for a given
 /// seed and the same taps.
@@ -18,8 +23,9 @@ public struct PickingRound: Sendable {
         case greenStem
         /// From inside the canopy: less sugar, more acid, green notes.
         case shaded
-        /// Second crop on a side shoot: small, hard and sour.
-        case wing
+        /// Second crop, on a side shoot: weeks behind the rest, small, hard and
+        /// sour. ("wing" in saved games.)
+        case secondCrop = "wing"
         /// "Hens and chicks": small berries, all skin and flavor.
         case shot
         /// Sunburned and shriveled: lots of sugar, little acid.
@@ -40,7 +46,7 @@ public struct PickingRound: Sendable {
             case .ripe: "Ripe bunch"
             case .greenStem: "Green-stemmed bunch"
             case .shaded: "Shaded bunch"
-            case .wing: "Wing cluster"
+            case .secondCrop: "Second crop"
             case .shot: "Hens and chicks"
             case .raisined: "Raisined bunch"
             case .rotten: "Moldy bunch"
@@ -58,19 +64,21 @@ public struct PickingRound: Sendable {
         public var isGood: Bool { self == .ripe || self == .shot || self == .golden }
 
         /// Never wanted in the bins.
-        public var isBad: Bool { self == .rotten || self == .sour || self == .leaf || self == .cane || self == .wing }
+        public var isBad: Bool { self == .rotten || self == .sour || self == .leaf || self == .cane || self == .secondCrop }
 
         /// What it adds to the bins.
         public var traits: Traits {
             switch self {
             case .ripe: Traits(weight: 1, brix: 0.4, acid: -0.2, tannin: 0.2, green: 0, complexity: 0.05, color: 0.2)
-            case .greenStem: Traits(weight: 1, brix: -0.2, acid: 0.3, tannin: 0, green: 0.7, complexity: 0, color: 0)
+            case .greenStem: Traits(weight: 1, brix: -0.4, acid: 0.4, tannin: 0, green: 0.7, complexity: 0, color: -0.2)
             case .shaded: Traits(weight: 0.9, brix: -1.6, acid: 1.4, tannin: -0.2, green: 0.8, complexity: 0, color: -0.6)
-            case .wing: Traits(weight: 0.4, brix: -4.5, acid: 3.5, tannin: 0, green: 1.6, complexity: 0, color: -1.2)
-            case .shot: Traits(weight: 0.6, brix: 1.2, acid: 0.4, tannin: 1.2, green: 0, complexity: 1, color: 1)
-            case .raisined: Traits(weight: 0.5, brix: 5, acid: -1.6, tannin: 0.3, green: 0, complexity: 0.3, color: 0.3)
-            case .rotten: Traits(weight: 0.8, brix: 0.3, acid: 0.4, tannin: -0.4, green: 0, complexity: 0, color: -1.5)
-            case .sour: Traits(weight: 0.6, brix: 0, acid: 0.8, tannin: -0.3, green: 0, complexity: 0, color: -0.8)
+            case .secondCrop: Traits(weight: 0.35, brix: -6, acid: 4.5, tannin: 0, green: 2, complexity: 0, color: -1.5)
+            case .shot: Traits(weight: 0.6, brix: 1.2, acid: 0, tannin: 0.5, green: 0.1, complexity: 1, color: 1)
+            // Drying concentrates the acid as heat burns it; heat also burns color.
+            case .raisined: Traits(weight: 0.5, brix: 5, acid: -0.6, tannin: 0.3, green: 0, complexity: 0.3, color: -0.4)
+            // Botrytis shrivels the berries, eats tartaric acid and adds earthy notes.
+            case .rotten: Traits(weight: 0.7, brix: 1, acid: -0.5, tannin: -0.4, green: 0, complexity: -0.3, color: -1.5)
+            case .sour: Traits(weight: 0.6, brix: -1, acid: 0.8, tannin: -0.3, green: 0, complexity: 0, color: -0.4)
             case .golden: Traits(weight: 1, brix: 0.4, acid: 0, tannin: 0.6, green: 0, complexity: 2, color: 0.6)
             case .leaf, .cane: Traits(weight: 0, brix: 0, acid: 0, tannin: 0, green: 0, complexity: 0, color: 0)
             }
@@ -175,8 +183,18 @@ public struct PickingRound: Sendable {
         public var green: Double { average(sums.green) }
         public var complexity: Double { average(sums.complexity) }
         public var color: Double { average(sums.color) }
-        /// Leaves and canes for every bunch of fruit.
-        public var mogShare: Double { Double(mog) / Double(max(1, bunches + mog)) }
+        /// Leaves and canes for every bunch of fruit. A cane counts for less
+        /// than a leaf: it gives up little in the ferment.
+        public var mogShare: Double {
+            (Double(count(.leaf)) + 0.7 * Double(count(.cane))) / Double(max(1, bunches + mog))
+        }
+        /// Share of the fruit, by weight, on green, unripe stems: what whole
+        /// clusters would put in the fermenter.
+        public var greenStems: Double {
+            guard weight > 0 else { return 0 }
+            return (Double(count(.greenStem)) * Kind.greenStem.traits.weight
+                + Double(count(.secondCrop)) * Kind.secondCrop.traits.weight) / weight
+        }
         public var rotShare: Double { weight > 0 ? rotWeight / weight : 0 }
         public var sourShare: Double { weight > 0 ? sourWeight / weight : 0 }
     }
@@ -293,7 +311,7 @@ public struct PickingRound: Sendable {
         expected = Self.average(of: normalized)
     }
 
-    /// A round on a block: early fruit means more shade, wings and green
+    /// A round on a block: early fruit means more shade, second crop and green
     /// stems; late fruit, raisins; rain, rot; a heat wave, sunburn.
     public init(block: VineyardBlock, style: WineStyle, weather: Weather = .sunny, duration: Double = 30, seed: UInt64) {
         self.init(odds: Self.odds(block: block, style: style, weather: weather), baseBrix: block.brix, baseAcid: block.acid,
@@ -308,16 +326,18 @@ public struct PickingRound: Sendable {
         let r = max(-2, min(2, (block.brix - main.middle) / ((main.upperBound - main.lowerBound) / 2)))
         let early = max(0, -r)
         let late = max(0, r)
+        // Grenache sets poorly in a cold spring: the most hens and chicks.
+        let shot = block.varietal == .grenache ? 0.08 : block.varietal == .cinsault ? 0.04 : 0.05
         var odds: [Kind: Double] = [
-            .ripe: 0.52 - 0.1 * early,
-            .greenStem: 0.08 + 0.07 * early - 0.03 * late,
-            .shaded: 0.11 + 0.04 * early,
-            .wing: 0.03 + 0.04 * early,
-            .shot: block.varietal == .cinsault ? 0.03 : 0.06,
-            .raisined: 0.02 + 0.06 * late + (weather == .heatWave ? 0.06 : 0),
-            .rotten: 0.015 + 0.8 * block.rot,
-            .sour: 0.005 + 0.3 * block.rot + 0.01 * late,
-            .golden: 0.03,
+            .ripe: 0.52 - 0.09 * early - 0.02 * late,
+            .greenStem: 0.08 + 0.10 * early - 0.05 * late,
+            .shaded: 0.11 + 0.03 * early - 0.03 * late,
+            .secondCrop: 0.035 + 0.005 * early - 0.005 * late,
+            .shot: shot,
+            .raisined: 0.025 - 0.02 * early + 0.075 * late + (weather == .heatWave ? 0.08 : 0),
+            .rotten: 0.015 - 0.01 * early + 0.02 * late + 0.8 * block.rot,
+            .sour: 0.005 - 0.003 * early + 0.007 * late + 0.3 * block.rot,
+            .golden: 0.03 - 0.01 * early,
             .leaf: 0.06,
             .cane: 0.02,
         ]
@@ -409,7 +429,7 @@ public struct PickingRound: Sendable {
         case .ripe: ("Ripe", .good)
         case .greenStem: ("Green stem", .info)
         case .shaded: ("+Acid −Sugar", .info)
-        case .wing: ("Sour & green!", .bad)
+        case .secondCrop: ("Sour & green!", .bad)
         case .shot: ("+Tannin +Complexity", .bonus)
         case .raisined: ("+Sugar −Acid", .info)
         case .rotten: ("Moldy!", .bad)

@@ -251,13 +251,14 @@ public struct Game: Codable, Equatable, Sendable {
             return nil
         }
         blocks[index].picked = true
-        // The sorting table catches most of the moldy and sour bunches, and
-        // the leaves and canes.
+        // The sorting table catches most of the leaves and canes, and the
+        // moldy bunches; sour rot is harder to spot.
         var bin = round.bin
         var sortedOut = 0
         if owns(.sortingTable) {
-            for kind in [PickingRound.Kind.rotten, .sour, .leaf, .cane] {
-                let n = Int((Double(bin.count(kind)) * 0.75).rounded())
+            let caught: [(PickingRound.Kind, Double)] = [(.rotten, 0.7), (.sour, 0.5), (.leaf, 0.85), (.cane, 0.9)]
+            for (kind, share) in caught {
+                let n = Int((Double(bin.count(kind)) * share).rounded())
                 for _ in 0..<n { bin.remove(kind) }
                 sortedOut += n
             }

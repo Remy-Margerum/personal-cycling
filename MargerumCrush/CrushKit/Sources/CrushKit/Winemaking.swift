@@ -34,6 +34,8 @@ public struct Winemaking: Sendable {
     /// Something Doug does at a station.
     public enum Action: Equatable, Sendable {
         case destem
+        /// Destem, but keep a third of the bunches whole, stems and all.
+        case wholeCluster
         case crush
         case loadPress
         case cutPress
@@ -48,6 +50,7 @@ public struct Winemaking: Sendable {
         public var name: String {
             switch self {
             case .destem: "Destem"
+            case .wholeCluster: "Keep ⅓ whole clusters"
             case .crush: "Crush into the press"
             case .loadPress: "Load the press"
             case .cutPress: "Stop the press"
@@ -68,7 +71,7 @@ public struct Winemaking: Sendable {
 
         public var station: StationID {
             switch self {
-            case .destem, .crush: .destemmer
+            case .destem, .wholeCluster, .crush: .destemmer
             case .loadPress, .cutPress, .press: .press
             case .fill(let vessel):
                 switch vessel {
@@ -88,14 +91,14 @@ public struct Winemaking: Sendable {
             case .punchDown: .punch
             case .openBleed, .closeBleed, .chill, .cutPress, .press, .loadPress: .valve
             case .addYeast: .taste
-            case .destem, .crush, .fill: .valve
+            case .destem, .wholeCluster, .crush, .fill: .valve
             }
         }
 
         /// Seconds Doug is busy with it, and can't walk.
         var duration: Double {
             switch self {
-            case .destem, .crush, .loadPress, .fill: 1.4
+            case .destem, .wholeCluster, .crush, .loadPress, .fill: 1.4
             case .press: 1.2
             case .punchDown: 1.0
             case .addYeast: 0.9
@@ -131,6 +134,13 @@ public struct Winemaking: Sendable {
     /// Rosé color, 0 (white wine) to 1 (red wine). Pale salmon, the color of
     /// Provence and of Riviera Rosé, is this band.
     public static let pink = 0.30...0.42
+
+    /// White: juice from a whole-cluster press stopped `cut` of the way
+    /// through its cycle, against the usual: about 60% a third of the way in,
+    /// 95% at the bitter press juice, 105% pressed to the end.
+    public static func pressYield(_ cut: Double) -> Double {
+        1.05 * (1 - pow(1 - min(1, max(0, cut)), 2.5))
+    }
 
     public let harvest: Harvest
     /// Vessels Doug can fill: new oak only once the winery has the barrels.
@@ -174,6 +184,8 @@ public struct Winemaking: Sendable {
     /// White: how far through the press cycle, 0...1.
     public private(set) var pressProgress = 0.0
     public private(set) var pressCutAt: Double?
+    /// Red: share of the fruit fermented as whole clusters, stems and all.
+    public private(set) var wholeCluster = 0.0
     /// Red: share of the juice bled off for saignée rosé, and its color.
     public private(set) var bleed = 0.0
     public private(set) var bleeding = false
@@ -193,6 +205,8 @@ public struct Winemaking: Sendable {
     /// When the juice (or the pressed red) started waiting for its next step.
     public private(set) var juiceSince = 0.0
     private var fermentStart: Double?
+    /// Hours the native yeast have had to get going: slower in cold juice.
+    private var wildClock = 0.0
     /// Fermentation progress, 0...1.
     private var progress = 0.0
     public private(set) var events: [Event] = []
@@ -205,6 +219,8 @@ public struct Winemaking: Sendable {
         stage = .waiting
         sugar = harvest.brix
         temperature = harvest.fruitTemperature
+        // Vinegar from sour rot and mold comes in with the fruit.
+        volatile = 0.3 * harvest.mustVolatile
     }
 
     // MARK: What the fruit asks for
@@ -224,18 +240,19 @@ public struct Winemaking: Sendable {
     public var pressKnee: Double { min(0.8, max(0.4, 0.6 - 0.08 * ripeness)) }
 
     /// Rosé and saignée: how fast the juice picks up color, per hour. Dark
-    /// grapes and ripe fruit color it fast; warm fruit faster still.
+    /// grapes and ripe fruit color it fast (Syrah in an hour or two, Grenache
+    /// in three or four); every 10 °C warmer doubles the pace.
     public var colorRate: Double {
         let base: Double
         switch harvest.varietal {
-        case .syrah: base = 0.14
-        case .mourvedre: base = 0.12
-        case .counoise: base = 0.10
-        case .grenache, .sauvignonBlanc: base = 0.075
-        case .cinsault: base = 0.06
+        case .syrah: base = 0.25
+        case .mourvedre: base = 0.15
+        case .counoise: base = 0.08
+        case .grenache, .sauvignonBlanc: base = 0.09
+        case .cinsault: base = 0.065
         }
-        let warmth = 0.7 + 0.015 * harvest.fruitTemperature
-        return base * max(0.6, 1 + 0.25 * ripeness) * warmth * (harvest.style == .red ? 0.45 : 1)
+        let warmth = pow(2, (harvest.fruitTemperature - 20) / 10)
+        return base * max(0.6, 1 + 0.25 * ripeness) * warmth * (harvest.style == .red ? 0.35 : 1)
     }
 
     /// Hours after crushing when the juice turns pale salmon, and when it's
@@ -249,9 +266,16 @@ public struct Winemaking: Sendable {
     /// out color and fruit; ripe fruit (higher pH) spoils sooner.
     public var yeastWindow: ClosedRange<Double> { 10...(30 - 6 * max(0, ripeness)) }
 
-    /// Red: hours to leave it on the skins once it's dry. Ripe tannins love a
-    /// few days more; green ones get harsher, so press those straight away.
-    public var macerationHours: Double { min(44, max(2, 18 + 14 * ripeness)) }
+    /// Red: hours to leave it on the skins once it's dry. Syrah and Mourvèdre
+    /// love a few days more when they're ripe; Grenache, Counoise and Cinsault
+    /// lose color and turn bitter, so press those soon. Green tannins get
+    /// harsher, so unripe fruit goes to the press straight away.
+    public var macerationHours: Double {
+        switch harvest.varietal {
+        case .syrah, .mourvedre: min(60, max(8, 30 + 16 * ripeness))
+        case .grenache, .counoise, .cinsault, .sauvignonBlanc: min(24, max(2, 10 + 8 * ripeness))
+        }
+    }
 
     /// How long the fermentation should take at a good temperature, in hours.
     public var expectedFermentation: Double {
@@ -266,7 +290,8 @@ public struct Winemaking: Sendable {
         let rate: Double
         switch stage {
         case .waiting, .juice, .pressed: rate = 1
-        case .skinContact: rate = 0.6
+        // Paced by the grape, so pale salmon lasts a few seconds for each one.
+        case .skinContact: rate = min(1, max(0.15, 0.047 / colorRate))
         case .pressing: rate = 0.25
         case .settling: rate = 2
         case .soaking: rate = 1.5
@@ -293,13 +318,19 @@ public struct Winemaking: Sendable {
         actions.first { $0.station == station }
     }
 
+    /// Everything that can be done at a station right now: the destemmer
+    /// offers whole clusters as well as destemming.
+    public func actions(at station: StationID) -> [Action] {
+        actions.filter { $0.station == station }
+    }
+
     /// Everything that can be done right now.
     public var actions: [Action] {
         var actions: [Action] = []
         switch stage {
         case .waiting:
             switch harvest.style {
-            case .red: actions.append(.destem)
+            case .red: actions += [.destem, .wholeCluster]
             case .rose: actions.append(.crush)
             case .white: actions.append(.loadPress)
             }
@@ -364,10 +395,13 @@ public struct Winemaking: Sendable {
         walker.walk(to: station)
     }
 
-    /// Does whatever can be done where Doug stands.
+    /// Does whatever can be done where Doug stands, or one particular thing
+    /// that can be done there.
     @discardableResult
-    public mutating func act() -> Action? {
-        guard let action = availableAction, perform(action) else { return nil }
+    public mutating func act(_ choice: Action? = nil) -> Action? {
+        guard busy <= 0, let station,
+              let action = choice ?? self.action(at: station), action.station == station, perform(action)
+        else { return nil }
         walker.face(action.station)
         busy = action.duration
         busyWith = action
@@ -379,11 +413,17 @@ public struct Winemaking: Sendable {
     public mutating func perform(_ action: Action) -> Bool {
         guard actions.contains(action) else { return false }
         switch action {
-        case .destem:
+        case .destem, .wholeCluster:
             processedAt = hours
             crushedAt = hours
+            wildClock = 0
             stage = .soaking
-            event("Into the fermenter", .info, .fermenter)
+            if action == .wholeCluster {
+                wholeCluster = 1.0 / 3
+                event("A third whole clusters", .info, .fermenter)
+            } else {
+                event("Into the fermenter", .info, .fermenter)
+            }
         case .crush:
             processedAt = hours
             crushedAt = hours
@@ -412,6 +452,7 @@ public struct Winemaking: Sendable {
                 juiceSince = hours
                 // Pressed juice is a little warmer than the fruit was; settling starts now.
                 clarity = 0
+                wildClock = 0
             } else {
                 sugarAtPress = sugar
                 if bleeding { bleeding = false }
@@ -425,6 +466,7 @@ public struct Winemaking: Sendable {
             if stage == .juice {
                 stage = .settling
                 clarity = 0
+                wildClock = 0
             } else {
                 stage = .done
             }
@@ -462,7 +504,10 @@ public struct Winemaking: Sendable {
         case .waiting:
             let late = hours > freshFor
             switch harvest.style {
-            case .red: add(.destemmer, "Destem the fruit into the fermenter", urgent: late)
+            case .red:
+                let stems = harvest.greenStems < 0.2 ? "Brown stems: whole clusters would add spice"
+                                                     : "Green stems: no whole clusters"
+                add(.destemmer, "Destem into the fermenter. \(stems)", urgent: late)
             case .rose: add(.destemmer, "Crush the grapes into the press for a few hours on the skins", urgent: late)
             case .white: add(.press, "Load the press with whole clusters", urgent: late)
             }
@@ -571,12 +616,13 @@ public struct Winemaking: Sendable {
         case .soaking:
             color += (1 - color) * (1 - exp(-colorRate * h))
             drift(h)
-            if let crushedAt, yeastAt == nil, hours - crushedAt > 48 {
+            wildClock += h * wildPace
+            if yeastAt == nil, wildClock > 48 {
                 wildStart = true
                 yeastAt = hours
                 fermentStart = hours
-                volatile += 0.12
-                event("Wild yeast took off!", .bad, .fermenter)
+                volatile += 0.06
+                event("Native yeast took off!", .bad, .fermenter)
             }
             if let fermentStart, hours >= fermentStart { stage = .fermenting }
         case .fermenting:
@@ -598,19 +644,24 @@ public struct Winemaking: Sendable {
     }
 
     private mutating func settle(_ h: Double) {
-        let tau = chilling ? 4.5 : 7.0
+        // Cold settling takes most of a day.
+        let tau = chilling ? 10.0 : 16.0
         clarity += (1 - clarity) * (1 - exp(-h / tau))
         drift(h)
-        if yeastAt == nil && hours - juiceSince > 30 {
+        wildClock += h * wildPace
+        if yeastAt == nil && wildClock > 30 {
             wildStart = true
             yeastAt = hours
             clarityAtYeast = clarity
             fermentStart = hours
-            volatile += 0.08
-            event("Wild yeast took off!", .bad, .lab)
+            volatile += 0.04
+            event("Native yeast took off!", .bad, .lab)
         }
         if let fermentStart, hours >= fermentStart { stage = .fermenting }
     }
+
+    /// Native yeast wake up slower in cold juice: half as fast at 10 °C.
+    private var wildPace: Double { 0.5 + 0.5 * min(1, max(0, (temperature - 10) / 6)) }
 
     /// Temperature drifting to the cellar's 18 °C, or chilled.
     private mutating func drift(_ h: Double) {
@@ -671,7 +722,7 @@ public struct Winemaking: Sendable {
     }
 
     private mutating func bleedStep(_ h: Double) {
-        let amount = min(0.025 * h, 0.35 - bleed)
+        let amount = min(0.05 * h, 0.35 - bleed)
         guard amount > 0 else {
             bleeding = false
             event("Bled all it will give", .info, .fermenter)
@@ -716,7 +767,7 @@ public struct Winemaking: Sendable {
         switch style {
         case .white:
             let cut = pressCutAt ?? 1
-            r.cases = 0.68 + 0.37 * (1 - (1 - cut) * (1 - cut))
+            r.cases = Self.pressYield(cut)
             let bitter = max(0, cut - pressKnee) / (1 - pressKnee)
             if bitter > 0.02 {
                 r.add("Pressed hard", bitter > 0.5 ? "Bitter press juice got in." : "A little press juice in the blend.",
@@ -769,8 +820,10 @@ public struct Winemaking: Sendable {
 
         if style == .red {
             if wildStart {
-                r.add("Wild fermentation", "The yeast never went in; it started on its own. Funky.", quality: -2)
+                r.add("Native yeast", "The native yeast started it before the yeast went in: funky and complex, but a gamble.",
+                      quality: -1)
                 r.profile.spice += 0.3
+                r.profile.body += 0.2
             } else if let yeastAt, let crushedAt {
                 let soaked = yeastAt - crushedAt
                 if soaked < yeastWindow.lowerBound {
@@ -802,6 +855,29 @@ public struct Winemaking: Sendable {
             r.profile.body += 1.2 * e
             r.profile.fruit += 0.8 * e
 
+            if wholeCluster > 0 {
+                // Brown, ripe stems give Syrah and Grenache spice and structure;
+                // green ones make it stalky and steal color.
+                let w = wholeCluster
+                let g = harvest.greenStems
+                let factors: (bonus: Double, spice: Double)
+                switch harvest.varietal {
+                case .syrah: factors = (3, 1)
+                case .grenache: factors = (1.5, 0.5)
+                case .counoise, .cinsault: factors = (0.5, 0.3)
+                case .mourvedre, .sauvignonBlanc: factors = (0, 0)
+                }
+                let lostColor = 1.5 * g + (harvest.varietal == .grenache ? 0.3 : 0) * (1 - g)
+                r.add("Whole clusters", g < 0.2 ? "A third whole bunches on brown stems: spice and structure."
+                                                : "Green stems went in with the bunches: stalky.",
+                      quality: factors.bonus * (1 - 2.5 * g))
+                r.profile.tannin += 1.5 * w
+                r.profile.spice += factors.spice * (1 - g) * w
+                r.profile.fruit -= ((0.3 + 0.7 * g) + 0.6 * lostColor) * w
+                r.profile.acidity -= 0.5 * w
+                if g * w >= 0.15 { r.faults.append(.stemmy) }
+            }
+
             if let pressedAt {
                 if let dryAt {
                     let since = pressedAt - dryAt
@@ -822,12 +898,13 @@ public struct Winemaking: Sendable {
                         r.profile.tannin += min(1.2, 0.03 * over)
                     }
                 } else if let s = sugarAtPress {
-                    if s > 4 {
+                    // A few degrees left finish in barrel; much more and it sticks.
+                    if s > 5 {
                         r.add("Pressed while sweet", "It stuck with \(Int(s.rounded()))° Brix of sugar left.",
-                              quality: -min(8, 2 * (s - 4)))
-                        r.faults.append(.sweet)
+                              quality: -min(8, 1.5 * (s - 5)))
+                        if s > 8 { r.faults.append(.sweet) }
                     } else {
-                        r.add("Finished in barrel", "Pressed just before dry.", quality: 0)
+                        r.add("Finished in barrel", "Pressed a little sweet; it fermented dry in barrel.", quality: 0)
                     }
                 }
             }
