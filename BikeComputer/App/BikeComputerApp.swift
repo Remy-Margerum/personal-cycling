@@ -2,12 +2,16 @@ import SwiftUI
 
 @main
 struct BikeComputerApp: App {
-    @State private var recorder = RideRecorder(
-        power: PowerMeterService(),
-        workout: WorkoutSessionService(),
-        location: LocationService(),
-        glasses: GlassesService(),
-        store: RideStore())
+    @State private var recorder: RideRecorder = {
+        let store = RideStore()
+        return RideRecorder(
+            power: PowerMeterService(),
+            workout: WorkoutSessionService(),
+            location: LocationService(),
+            glasses: GlassesService(),
+            store: store,
+            intervals: IntervalsSync(store: store))
+    }()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -39,6 +43,8 @@ struct BikeComputerApp: App {
                 recorder.location.stop()
             } else if phase == .active {
                 recorder.location.start()
+                // Retry Intervals.icu uploads that didn't go through (no signal, no key).
+                Task { await recorder.intervals.sync() }
             }
         }
     }

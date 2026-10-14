@@ -14,6 +14,7 @@ final class RideRecorder {
     let location: LocationService
     let glasses: GlassesService
     let store: RideStore
+    let intervals: IntervalsSync
 
     private(set) var state: State = .idle
     private(set) var startDate: Date?
@@ -36,12 +37,13 @@ final class RideRecorder {
     @ObservationIgnored private var usingBarometer = false
 
     init(power: PowerMeterService, workout: WorkoutSessionService, location: LocationService,
-         glasses: GlassesService, store: RideStore) {
+         glasses: GlassesService, store: RideStore, intervals: IntervalsSync) {
         self.power = power
         self.workout = workout
         self.location = location
         self.glasses = glasses
         self.store = store
+        self.intervals = intervals
         location.onLocations = { [weak self] locations in self?.handle(locations) }
         glasses.metrics = { [weak self] in self?.glassesMetrics ?? GlassesMetrics() }
     }
@@ -112,6 +114,7 @@ final class RideRecorder {
             + "\(Int(movingTime)) s moving, \(DebugFormat.fixed(elevationGain, 0)) m climbed")
         do {
             try store.save(ride)
+            if IntervalsSync.autoUploadEnabled { intervals.queue(ride) }
         } catch {
             lastError = "Couldn't save ride: \(error.localizedDescription)"
             DebugLog.shared.log(.ride, lastError ?? "")

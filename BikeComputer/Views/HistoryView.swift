@@ -10,11 +10,16 @@ struct HistoryView: View {
             List {
                 ForEach(recorder.store.rides) { ride in
                     NavigationLink(value: ride.id) {
-                        VStack(alignment: .leading) {
-                            Text(ride.startDate, format: .dateTime.weekday().month().day().hour().minute())
-                            let units = Units(metric: useMetric)
-                            Text("\(units.distance(ride.summary.distance)) \(units.distanceUnit) · \(Units.duration(ride.movingTime))")
-                                .font(.footnote).foregroundStyle(.secondary)
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(ride.startDate, format: .dateTime.weekday().month().day().hour().minute())
+                                let units = Units(metric: useMetric)
+                                Text("\(units.distance(ride.summary.distance)) \(units.distanceUnit) · \(Units.duration(ride.movingTime))")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            UploadIcon(state: recorder.intervals.state(of: ride),
+                                       uploading: recorder.intervals.uploading.contains(ride.id))
                         }
                     }
                 }
@@ -41,8 +46,6 @@ struct RideDetailView: View {
     let ride: Ride
     @Environment(RideRecorder.self) private var recorder
     @AppStorage("useMetric") private var useMetric = false
-    @State private var uploadStatus: String?
-    @State private var uploading = false
 
     var body: some View {
         let s = ride.summary
@@ -67,26 +70,59 @@ struct RideDetailView: View {
                 ShareLink(item: recorder.store.tcxURL(for: ride)) {
                     Label("Export TCX", systemImage: "square.and.arrow.up")
                 }
-                Button {
-                    Task { await upload() }
-                } label: {
-                    Label(uploading ? "Uploading…" : "Upload to Intervals.icu", systemImage: "icloud.and.arrow.up")
-                }
-                .disabled(uploading)
-                if let uploadStatus { Text(uploadStatus).font(.footnote) }
+                intervalsRow
             }
         }
         .navigationTitle(ride.startDate.formatted(date: .abbreviated, time: .shortened))
     }
 
-    private func upload() async {
-        uploading = true
-        defer { uploading = false }
-        do {
-            try await IntervalsUploader.upload(tcxFile: recorder.store.tcxURL(for: ride), name: "Raggio ride")
-            uploadStatus = "Uploaded. It will show on the cycling page after the next hourly sync."
-        } catch {
-            uploadStatus = error.localizedDescription
+    @ViewBuilder private var intervalsRow: some View {
+        let uploading = recorder.intervals.uploading.contains(ride.id)
+        switch recorder.intervals.state(of: ride) {
+        case let .uploaded(activityID, _) where !uploading:
+            if let activityID, let url = Intervals.activityURL(activityID) {
+                Link(destination: url) {
+                    Label("Open in Intervals.icu", systemImage: "checkmark.icloud")
+                }
+            } else {
+                Label("Uploaded to Intervals.icu", systemImage: "checkmark.icloud")
+            }
+        case let state:
+            Button {
+                Task { await recorder.intervals.upload(ride) }
+            } label: {
+                if uploading {
+                    Label("Uploading…", systemImage: "icloud.and.arrow.up")
+                } else if case .failed = state {
+                    Label("Retry upload to Intervals.icu", systemImage: "arrow.clockwise.icloud")
+                } else {
+                    Label("Upload to Intervals.icu", systemImage: "icloud.and.arrow.up")
+                }
+            }
+            .disabled(uploading)
+            if case let .failed(message) = state {
+                Text(message).font(.footnote).foregroundStyle(.orange)
+            }
+        }
+    }
+}
+
+/// Intervals.icu status in the ride list: nothing if the ride was never
+/// queued for upload.
+private struct UploadIcon: View {
+    let state: Intervals.UploadState?
+    let uploading: Bool
+
+    var body: some View {
+        switch state {
+        case .uploaded where !uploading:
+            Image(systemName: "checkmark.icloud").foregroundStyle(.secondary)
+        case .failed where !uploading:
+            Image(systemName: "exclamationmark.icloud").foregroundStyle(.orange)
+        case .some:
+            Image(systemName: "icloud.and.arrow.up").foregroundStyle(.secondary)
+        case nil:
+            EmptyView()
         }
     }
 }

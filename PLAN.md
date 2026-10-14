@@ -175,8 +175,11 @@ Raggio → Logs).
       parallel. Compare distance, climbing, average power, NP, heart rate.
 - [ ] Check the Apple Health workout: route on the map, power, cadence,
       distance present and not doubled.
-- [ ] Upload a TCX to Intervals.icu from the app (API key under Settings).
-      It should appear on remymargerum.com/cycling after the next hourly sync.
+- [ ] Add the Intervals.icu API key under Settings, save a ride: it uploads
+      by itself (History shows a ✓ cloud and opens it in Intervals.icu) and
+      appears on remymargerum.com/cycling after the next hourly sync. Also
+      try finishing a ride in airplane mode: it should upload when you next
+      open the app with signal.
 - [ ] Tune the distance / elevation filters in `RideKit` from the results.
 
 ## Phase 6 — Hardening and features (after it works)

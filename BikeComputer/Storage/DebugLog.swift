@@ -12,7 +12,7 @@ import RideKit
 final class DebugLog: @unchecked Sendable {
     static let shared = DebugLog()
 
-    enum Category: String { case app, power, hr, gps, ride, glasses }
+    enum Category: String { case app, power, hr, gps, ride, glasses, intervals }
 
     let folder: URL
     private let queue = DispatchQueue(label: "DebugLog")
