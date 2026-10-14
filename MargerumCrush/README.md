@@ -101,7 +101,7 @@ reuses Raggio's signing secrets (one distribution certificate and one App
 Store Connect API key cover every app on the team), so the game needs only
 three things set up once, plus one new secret.
 
-- [ ] **App ID.** developer.apple.com → Certificates, Identifiers & Profiles
+- [x] **App ID.** developer.apple.com → Certificates, Identifiers & Profiles
       → Identifiers → **+** → App IDs → App. Description `Margerum Crush`,
       Bundle ID **Explicit** `com.remymargerum.margerumcrush`. No
       capabilities needed. Register.
@@ -109,10 +109,10 @@ three things set up once, plus one new secret.
       Store Connect** → the new App ID → the same Apple Distribution
       certificate Raggio uses → name it `Margerum Crush App Store` →
       download it into `~/BikeComputerSigning`.
-- [ ] **App record.** App Store Connect → Apps → **+** → New App: iOS, the
-      bundle ID above, SKU `margerumcrush`, name **Margerum Crush** (it has
-      to be unique on the App Store even though it's never published; add a
-      word if it's taken).
+- [x] **App record** (done: name **Margerum**, SKU `margerum`). App Store
+      Connect → Apps → **+** → New App: iOS, the bundle ID above, a SKU, and
+      a name that's unique on the App Store (even though it's never
+      published).
 - [ ] **GitHub secret** `CRUSH_PROVISIONING_PROFILE_BASE64`: the profile,
       base64-encoded. In Git Bash on Windows:
 
