@@ -71,6 +71,10 @@ struct Bot {
                 game.topUp(.neutralOak)
                 game.topUp(.newOak)
             }
+            // The bots don't keep wine for another year: what's left goes for bulk.
+            if game.cellarMonth == Aging.last {
+                for lot in game.lots { game.sellInBulk(lot.id) }
+            }
             game.nextMonth()
         }
         if let report = game.report { profits.append(report.profit) }

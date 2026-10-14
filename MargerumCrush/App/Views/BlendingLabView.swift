@@ -2,7 +2,8 @@ import CrushKit
 import SwiftUI
 
 /// Blend lots into one of the wines, watching the taste against the style
-/// the critic expects, then bottle it.
+/// the critic expects, then bottle it. Anything in the cellar can go in, as
+/// long as the label rules hold: 85% the wine's color, 85% one vintage.
 struct BlendingLabView: View {
     @Environment(GameStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -23,16 +24,26 @@ struct BlendingLabView: View {
             ReviewView(wine: bottled)
         }
         .onAppear {
-            // One lot to choose from: start with all of it.
-            if cases.isEmpty, let lots = store.game?.lots(for: wine), lots.count == 1 {
-                cases[lots[0].id] = lots[0].cases
+            // Start with this year's wine of the right color (and grape, for
+            // the varietal wines).
+            if cases.isEmpty, let game = store.game {
+                for lot in start(game) { cases[lot.id] = lot.cases }
             }
         }
     }
 
+    private func start(_ game: Game) -> [Lot] {
+        let own = game.lots(for: wine)
+        let newest = own.map(\.vintage).max()
+        let grapes = wine.spec.requiredVarietals
+        return own.filter { $0.vintage == newest && (grapes.count != 1 || $0.varietal == grapes[0]) }
+    }
+
     private func lab(_ game: Game) -> some View {
         let spec = wine.spec
-        let lots = game.lots(for: wine)
+        let lots = game.blendable(for: wine)
+        let own = lots.filter { $0.style == spec.style }
+        let others = lots.filter { $0.style != spec.style }
         let analysis = game.analyze(Blend(wine: wine, cases: cases))
         let nextMonth = game.monthsLeft > 0 ? game.analyze(Blend(wine: wine, cases: cases), monthsAhead: 1) : nil
         return ScrollView {
@@ -41,8 +52,8 @@ struct BlendingLabView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
-                BlendPreview(wine: wine, vintage: game.vintage, analysis: analysis, month: Aging.name(game.cellarMonth),
-                             nextMonth: nextMonth)
+                BlendPreview(wine: wine, vintage: analysis.vintage ?? game.vintage, analysis: analysis,
+                             month: Aging.name(game.cellarMonth), nextMonth: nextMonth)
                 ProfileChart(profile: analysis.profile, target: spec.target, empty: analysis.cases == 0)
                 if !analysis.composition.isEmpty {
                     CompositionBar(composition: analysis.composition)
@@ -57,15 +68,21 @@ struct BlendingLabView: View {
                 HStack {
                     SectionTitle("Lots")
                     Button("Use all") {
-                        for lot in lots { cases[lot.id] = lot.cases }
+                        for lot in own { cases[lot.id] = lot.cases }
                     }
                     .font(.caption.weight(.semibold))
                     Button("Clear") { cases = [:] }
                         .font(.caption.weight(.semibold))
                         .padding(.leading, 8)
                 }
-                ForEach(lots) { lot in
-                    LotSlider(lot: lot, cases: binding(for: lot), share: share(of: lot, in: analysis))
+                ForEach(own) { lot in
+                    LotSlider(lot: lot, vintage: game.vintage, cases: binding(for: lot), share: share(of: lot, in: analysis))
+                }
+                if !others.isEmpty {
+                    SectionTitle("Other wine in the cellar", detail: "Up to 15% of the blend")
+                    ForEach(others) { lot in
+                        LotSlider(lot: lot, vintage: game.vintage, cases: binding(for: lot), share: share(of: lot, in: analysis))
+                    }
                 }
             }
             .padding(16)
@@ -79,7 +96,7 @@ struct BlendingLabView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(!analysis.canBottle || game.hasBottled(wine))
+            .disabled(!analysis.canBottle)
             .padding(.horizontal)
             .padding(.vertical, 10)
             .background(.bar)
@@ -250,6 +267,8 @@ struct CompositionBar: View {
 
 struct LotSlider: View {
     let lot: Lot
+    /// This year's vintage: older lots say which harvest they're from.
+    let vintage: Int
     @Binding var cases: Double
     let share: Double
 
@@ -263,10 +282,11 @@ struct LotSlider: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-            Text("\(lot.vessel.name) · quality \(Int(lot.quality.rounded())) · \(Format.one(lot.alcohol))%"
+            Text((lot.vintage < vintage ? "\(String(lot.vintage)) · " : "")
+                 + "\(lot.style.name) · \(lot.vessel.name) · quality \(Int(lot.quality.rounded())) · \(Format.one(lot.alcohol))%"
                  + (share > 0 ? " · \(Format.percent(share)) of the blend" : ""))
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(lot.vintage < vintage ? Theme.wine : Color.secondary)
             Slider(value: $cases, in: 0...Double(lot.cases), step: lot.cases >= 50 ? 5 : 1)
                 .tint(Theme.wine)
         }

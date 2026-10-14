@@ -9,18 +9,32 @@ public struct CrushPlan: Sendable {
     public var skill: Double
     /// Bleed some juice off the reds for saignée rosé.
     public var saignee: Bool
-    /// Where the wine goes, if the winery has it.
-    public var vessel: Vessel
+    /// Where the wine goes at barrel-down: new oak only if the winery has it.
+    public var split: VesselSplit
 
-    public init(skill: Double, saignee: Bool = false, vessel: Vessel = .neutralOak) {
+    public init(skill: Double, saignee: Bool = false, split: VesselSplit) {
         self.skill = min(1, max(0, skill))
         self.saignee = saignee
-        self.vessel = vessel
+        self.split = split
+    }
+
+    /// All of it into one kind of vessel.
+    public init(skill: Double, saignee: Bool = false, vessel: Vessel = .neutralOak) {
+        self.init(skill: skill, saignee: saignee, split: .only(vessel))
     }
 
     /// The cellar crew: decent, never inspired.
+    public static func crew(saignee: Bool, split: VesselSplit) -> CrushPlan {
+        CrushPlan(skill: 0.55, saignee: saignee, split: split)
+    }
+
     public static func crew(saignee: Bool, vessel: Vessel) -> CrushPlan {
-        CrushPlan(skill: 0.55, saignee: saignee, vessel: vessel)
+        crew(saignee: saignee, split: .only(vessel))
+    }
+
+    /// The split for this wine, with what the winery has.
+    func split(for w: Winemaking) -> VesselSplit {
+        w.harvest.style == .rose ? .only(.stainless) : split.available(in: w.vessels)
     }
 
     /// The next thing to do, if it's time. With `lookahead` it answers a little
@@ -46,7 +60,7 @@ public struct CrushPlan: Sendable {
             return w.pressProgress >= target - (lookahead ? 0.12 : 0) ? .cutPress : nil
         case .juice:
             guard lookahead || w.hours - w.juiceSince >= 1 + 4 * slack else { return nil }
-            return .fill(vessel(for: w))
+            return .barrelDown
         case .settling:
             if !w.chilling && w.temperature > 14 && (slack < 0.5 || w.hours - w.juiceSince > 6) { return .chill(true) }
             if w.yeastAt == nil && w.clarity >= 0.74 - 0.3 * slack - (lookahead ? 0.15 : 0) { return .addYeast }
@@ -78,7 +92,7 @@ public struct CrushPlan: Sendable {
             return since >= w.macerationHours + 16 * slack - (lookahead ? 4 : 0) ? .press : nil
         case .pressed:
             guard lookahead || w.hours - w.juiceSince >= 1 + 3 * slack else { return nil }
-            return .fill(vessel(for: w))
+            return .barrelDown
         case .done:
             return nil
         }
@@ -89,17 +103,12 @@ public struct CrushPlan: Sendable {
         switch w.stage {
         case .waiting: w.actions.first?.station
         case .skinContact, .pressing, .dry: .press
-        case .juice, .pressed: vessel(for: w).station
+        case .juice, .pressed: .barrels
         case .settling: .lab
         case .soaking: saignee && w.bleed < 0.2 ? .fermenter : .lab
         case .fermenting: w.harvest.style == .red ? .fermenter : .chiller
         case .done: nil
         }
-    }
-
-    private func vessel(for w: Winemaking) -> Vessel {
-        if w.harvest.style == .rose { return .stainless }
-        return w.vessels.contains(vessel) ? vessel : .neutralOak
     }
 }
 
@@ -127,7 +136,10 @@ extension Winemaking {
     public mutating func finish(with plan: CrushPlan) {
         var steps = 0
         while !isFinished && steps < 50_000 {
-            if let action = self.plan(plan) { perform(action) }
+            if let action = self.plan(plan) {
+                if action == .barrelDown { split = plan.split(for: self) }
+                perform(action)
+            }
             advance(by: 0.1)
             steps += 1
         }
@@ -144,6 +156,7 @@ extension Winemaking {
         guard busy <= 0, !isFinished else { return }
         if let action = plan.next(self), actions.contains(action) {
             if station == action.station {
+                if action == .barrelDown { split = plan.split(for: self) }
                 act(action)
             } else if destination != action.station {
                 walk(to: action.station)

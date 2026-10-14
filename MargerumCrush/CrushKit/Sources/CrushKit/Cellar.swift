@@ -23,12 +23,104 @@ public enum Vessel: String, Codable, CaseIterable, Sendable {
     /// Barrel cost per ton of fruit.
     public var costPerTon: Double { self == .newOak ? 1_500 : 0 }
 
+    /// For lot names: "steel", "neutral oak", "new oak".
+    public var short: String {
+        switch self {
+        case .stainless: "steel"
+        case .neutralOak: "neutral oak"
+        case .newOak: "new oak"
+        }
+    }
+
     var effect: TasteProfile {
         switch self {
         case .stainless: TasteProfile(fruit: 0.4, acidity: 0.3)
         case .neutralOak: TasteProfile(acidity: -0.2, tannin: 0.3, body: 0.6, oak: 1.5)
         case .newOak: TasteProfile(fruit: -0.3, tannin: 1, body: 0.9, oak: 4.5)
         }
+    }
+}
+
+/// How the wine is shared out at barrel-down between steel tanks, neutral
+/// barrels and new French oak, as shares that add up to 1. Each share becomes
+/// its own lot in the cellar.
+public struct VesselSplit: Codable, Equatable, Hashable, Sendable {
+    public private(set) var stainless: Double
+    public private(set) var neutralOak: Double
+    public private(set) var newOak: Double
+
+    /// Shares in any units; they're scaled to add up to 1. All zero means
+    /// all neutral oak.
+    public init(stainless: Double = 0, neutralOak: Double = 0, newOak: Double = 0) {
+        let s = max(0, stainless)
+        let n = max(0, neutralOak)
+        let f = max(0, newOak)
+        let total = s + n + f
+        self.stainless = total > 0 ? s / total : 0
+        self.neutralOak = total > 0 ? n / total : 1
+        self.newOak = total > 0 ? f / total : 0
+    }
+
+    public static func only(_ vessel: Vessel) -> VesselSplit {
+        switch vessel {
+        case .stainless: VesselSplit(stainless: 1)
+        case .neutralOak: VesselSplit(neutralOak: 1)
+        case .newOak: VesselSplit(newOak: 1)
+        }
+    }
+
+    public subscript(vessel: Vessel) -> Double {
+        switch vessel {
+        case .stainless: stainless
+        case .neutralOak: neutralOak
+        case .newOak: newOak
+        }
+    }
+
+    /// The vessel with the most wine.
+    public var main: Vessel { Vessel.allCases.max { self[$0] < self[$1] } ?? .neutralOak }
+
+    /// The vessels with wine in them.
+    public var used: [Vessel] { Vessel.allCases.filter { self[$0] >= 0.005 } }
+
+    /// The same split with one vessel set to `share` and the others (of
+    /// `vessels`, the ones the winery has) scaled to fill the rest, keeping
+    /// their proportions, or shared evenly if they were empty.
+    public func setting(_ vessel: Vessel, to share: Double, among vessels: [Vessel] = Vessel.allCases) -> VesselSplit {
+        let others = vessels.filter { $0 != vessel }
+        let share = others.isEmpty ? 1 : min(1, max(0, share))
+        let rest = others.reduce(0) { $0 + self[$1] }
+        var shares: [Vessel: Double] = [vessel: share]
+        for other in others {
+            shares[other] = rest > 0 ? self[other] / rest * (1 - share) : (1 - share) / Double(others.count)
+        }
+        return VesselSplit(stainless: shares[.stainless] ?? 0, neutralOak: shares[.neutralOak] ?? 0,
+                           newOak: shares[.newOak] ?? 0)
+    }
+
+    /// Without the vessels the winery doesn't have: their share goes to
+    /// neutral barrels.
+    public func available(in vessels: [Vessel]) -> VesselSplit {
+        var shares = Vessel.allCases.map { vessels.contains($0) ? self[$0] : 0 }
+        let missing = 1 - shares.reduce(0, +)
+        shares[1] += missing
+        return VesselSplit(stainless: shares[0], neutralOak: shares[1], newOak: shares[2])
+    }
+
+    /// `cases` shared out by the split, adding up exactly.
+    public func cases(_ cases: Int) -> [(vessel: Vessel, cases: Int)] {
+        let vessels = used
+        var parts = vessels.map { (vessel: $0, cases: Int((Double(cases) * self[$0]).rounded(.down))) }
+        var left = cases - parts.reduce(0) { $0 + $1.cases }
+        let byRemainder = vessels.indices.sorted {
+            let a = Double(cases) * self[vessels[$0]], b = Double(cases) * self[vessels[$1]]
+            return a - a.rounded(.down) > b - b.rounded(.down)
+        }
+        for i in byRemainder where left > 0 {
+            parts[i].cases += 1
+            left -= 1
+        }
+        return parts.filter { $0.cases > 0 }
     }
 }
 
@@ -224,7 +316,8 @@ public struct Harvest: Codable, Equatable, Sendable {
         }
     }
 
-    /// The wine from Doug's crush, or the crew's: one lot, or two for a saignée.
+    /// The wine from Doug's crush, or the crew's: a lot for each kind of
+    /// vessel it went into, and one more for a saignée.
     func lots(from r: WinemakingResult) -> [Lot] {
         let quality = min(100, max(0, self.quality + r.quality))
         let made = max(1, Int((Double(cases) * r.cases).rounded()))
@@ -234,12 +327,16 @@ public struct Harvest: Codable, Equatable, Sendable {
                         profile: profile(as: .rose) + r.profile, quality: quality,
                         color: varietal.roseColor(r.roseColor ?? 0.36), extra: r.faults)]
         case .white:
-            return [lot(name: blockName, style: .white, vessel: r.vessel, cases: made,
-                        profile: profile(as: .white) + r.profile, quality: quality, extra: r.faults)]
+            return r.split.cases(made).map { part in
+                lot(name: name(part.vessel, r.split), style: .white, vessel: part.vessel, cases: part.cases,
+                    profile: profile(as: .white) + r.profile, quality: quality, extra: r.faults)
+            }
         case .red:
             let rose = Int((Double(cases) * r.bleed).rounded())
-            var lots = [lot(name: blockName, style: .red, vessel: r.vessel, cases: cases - rose,
-                            profile: profile(as: .red) + r.profile, quality: quality, extra: r.faults)]
+            var lots = r.split.cases(cases - rose).map { part in
+                lot(name: name(part.vessel, r.split), style: .red, vessel: part.vessel, cases: part.cases,
+                    profile: profile(as: .red) + r.profile, quality: quality, extra: r.faults)
+            }
             if rose > 0 {
                 // Bled off before the red's troubles: only the fruit's own faults.
                 let c = r.bleedColor
@@ -252,6 +349,12 @@ public struct Harvest: Codable, Equatable, Sendable {
             }
             return lots
         }
+    }
+
+    /// "Ballard Canyon Syrah", or "Ballard Canyon Syrah, new oak" when the
+    /// wine went into more than one kind of vessel.
+    private func name(_ vessel: Vessel, _ split: VesselSplit) -> String {
+        split.used.count > 1 ? "\(blockName), \(vessel.short)" : blockName
     }
 
     private func lot(name: String, style: WineStyle, vessel: Vessel, cases: Int,
@@ -290,10 +393,12 @@ public struct Lot: Codable, Equatable, Identifiable, Sendable {
     /// Interest from the picking: a share of brown-stemmed, shot-berry or
     /// perfect bunches. Adds to the critic's score.
     public var complexity: Double
+    /// The harvest it came from.
+    public var vintage: Int
 
     public init(id: UUID = UUID(), name: String, varietal: Varietal, style: WineStyle, vessel: Vessel, cases: Int,
                 profile: TasteProfile, quality: Double, alcohol: Double, color: RGB, faults: [Fault],
-                complexity: Double = 0) {
+                complexity: Double = 0, vintage: Int = 0) {
         self.id = id
         self.name = name
         self.varietal = varietal
@@ -307,6 +412,7 @@ public struct Lot: Codable, Equatable, Identifiable, Sendable {
         self.color = color
         self.faults = faults
         self.complexity = complexity
+        self.vintage = vintage
         self.profile = taste(at: 0)
     }
 

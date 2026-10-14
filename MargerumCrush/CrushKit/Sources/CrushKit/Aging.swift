@@ -7,7 +7,8 @@ import Foundation
 /// reds five to come together in barrel. New oak takes months to show;
 /// neutral barrels add texture more than flavor.
 public enum Aging {
-    /// The cellar year, from the end of the harvest to the release.
+    /// The cellar year, from the end of the harvest to the release. Wine
+    /// kept for another year carries on: month 12 is its second November.
     public static let months = ["Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"]
     public static var last: Int { months.count - 1 }
 
@@ -63,7 +64,8 @@ public enum Aging {
             p.body = 0.02 * m
         case .red:
             p.fruit = 0.25 * bell(m, 4, 2.5) - 0.06 * max(0, m - 6)
-            p.tannin = -0.12 * m
+            // Tannins soften fastest in the first year.
+            p.tannin = -0.12 * min(m, 12) - 0.04 * max(0, m - 12)
             p.body = 0.05 * m
             p.spice = 0.05 * m
             p.acidity = -0.04 * min(m, 8)

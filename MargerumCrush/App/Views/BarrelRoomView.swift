@@ -345,7 +345,8 @@ struct CellarHUD: View {
     }
 }
 
-/// The lab bench: the four wines, each ready to blend or already bottled.
+/// The lab bench: the four wines, ready to blend (as often as you like) or
+/// not possible yet, and what's bottled so far.
 struct BlendingBench: View {
     @Environment(GameStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -355,13 +356,19 @@ struct BlendingBench: View {
             ScrollView {
                 if let game = store.game {
                     VStack(spacing: 14) {
-                        SectionTitle("Make the wines", detail: "\(Aging.name(game.cellarMonth)) · one bottling of each")
+                        SectionTitle("Make the wines", detail: Aging.name(game.cellarMonth))
                         ForEach(WineID.allCases) { wine in
                             WineRow(game: game, wine: wine)
                         }
+                        if !game.bottled.isEmpty {
+                            SectionTitle("Bottled", detail: "\(game.bottled.reduce(0) { $0 + $1.cases }) cases")
+                            ForEach(game.bottled) { wine in
+                                BottledRow(wine: wine)
+                            }
+                        }
                         SectionTitle("In the cellar", detail: "\(game.lots.reduce(0) { $0 + $1.cases }) cases")
                         ForEach(game.lots) { lot in
-                            LotRow(lot: lot)
+                            LotRow(lot: lot, vintage: game.vintage)
                         }
                     }
                     .padding(16)

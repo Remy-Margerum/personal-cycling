@@ -96,8 +96,20 @@ public struct WineSpec: Sendable {
 
         var problems: [String] = []
         if cases == 0 { problems.append("Add some wine.") }
-        for part in used where part.lot.style != style {
-            problems.append("\(part.lot.name) is \(part.lot.style.name.lowercased()); \(name) has to be \(style.name.lowercased()).")
+        // Blend as you like, within what the label allows: a little white in
+        // a red is fine (Côte-Rôtie does it), but it has to be mostly the
+        // right color...
+        let inStyle = used.filter { $0.lot.style == style }.reduce(0) { $0 + $1.cases }
+        if cases > 0 && Double(inStyle) < 0.85 * total {
+            problems.append("\(name) has to be at least 85% \(style.name.lowercased()) wine. Now \(percent(Double(inStyle) / total)).")
+        }
+        // ...and 85% from one harvest to put a vintage on it.
+        var byVintage: [Int: Int] = [:]
+        for part in used { byVintage[part.lot.vintage, default: 0] += part.cases }
+        let main = byVintage.sorted { ($0.value, $0.key) > ($1.value, $1.key) }.first
+        if cases > 0, let main, Double(main.value) < 0.85 * total {
+            problems.append("A vintage on the label needs 85% from one harvest. Now \(percent(Double(main.value) / total)) "
+                            + "from \(main.key).")
         }
         switch rule {
         case .varietal(let grape, let minimum):
@@ -133,7 +145,8 @@ public struct WineSpec: Sendable {
         let score = cases > 0 ? Int(min(100, max(70, raw)).rounded()) : 0
 
         return BlendAnalysis(cases: cases, profile: profile, quality: quality, alcohol: alcohol, color: color,
-                             composition: composition, problems: problems, misses: misses, young: young, score: score)
+                             composition: composition, problems: problems, misses: misses, young: young, score: score,
+                             vintage: main?.key)
     }
 }
 
@@ -172,6 +185,8 @@ public struct BlendAnalysis: Equatable, Sendable {
     public var young: Double
     /// The winemaker's estimate. The critic may land a point either side.
     public var score: Int
+    /// The harvest most of it came from: the vintage on the label.
+    public var vintage: Int?
 
     public var canBottle: Bool { problems.isEmpty && cases > 0 }
 }
@@ -191,6 +206,9 @@ public struct BottledWine: Codable, Equatable, Identifiable, Sendable {
     public var revenue: Double?
     /// The cellar month it was bottled (see `Aging.months`).
     public var month: Int?
+    /// How far its oak landed outside Doug's range (negative: too little).
+    /// Doug's notes at barrel-down learn from it.
+    public var oakMiss: Double?
 
     public var spec: WineSpec { wine.spec }
     public var verdict: String { Self.verdict(score) }
@@ -297,4 +315,32 @@ func list(_ items: [String]) -> String {
 /// "75%"
 func percent(_ share: Double) -> String {
     "\(Int((share * 100).rounded()))%"
+}
+
+extension WineSpec {
+    /// How Doug barrels down the wine for it, from the Margerum tech sheets
+    /// (nudged to fit the game's oak): Sybarite mostly steel with a little
+    /// neutral oak, M5 in neutral barrels with a few new, ÜBER mostly new
+    /// French oak.
+    public var barrels: VesselSplit {
+        switch id {
+        case .sybarite: VesselSplit(stainless: 0.85, neutralOak: 0.15)
+        case .rose: .only(.stainless)
+        case .m5: VesselSplit(neutralOak: 0.8, newOak: 0.2)
+        case .uber: VesselSplit(neutralOak: 0.15, newOak: 0.85)
+        }
+    }
+}
+
+/// Doug's note at barrel-down for one wine a lot might go into.
+public struct BarrelNote: Equatable, Sendable, Identifiable {
+    public let wine: WineID
+    public let text: String
+    /// Where he'd aim.
+    public let target: VesselSplit
+    /// How sure he is of the main vessel's share, either way; nil while it's
+    /// only a hunch.
+    public let margin: Double?
+
+    public var id: WineID { wine }
 }

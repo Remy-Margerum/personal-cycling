@@ -40,7 +40,8 @@ public struct Winemaking: Sendable {
         case loadPress
         case cutPress
         case press
-        case fill(Vessel)
+        /// Into steel, neutral barrels and new oak, shared out by `split`.
+        case barrelDown
         case openBleed
         case closeBleed
         case addYeast
@@ -55,12 +56,7 @@ public struct Winemaking: Sendable {
             case .loadPress: "Load the press"
             case .cutPress: "Stop the press"
             case .press: "Press"
-            case .fill(let vessel):
-                switch vessel {
-                case .stainless: "Fill the steel tank"
-                case .neutralOak: "Fill neutral barrels"
-                case .newOak: "Fill new oak barrels"
-                }
+            case .barrelDown: "Barrel down"
             case .openBleed: "Open the bleed valve"
             case .closeBleed: "Close the bleed valve"
             case .addYeast: "Add the yeast"
@@ -73,12 +69,7 @@ public struct Winemaking: Sendable {
             switch self {
             case .destem, .wholeCluster, .crush: .destemmer
             case .loadPress, .cutPress, .press: .press
-            case .fill(let vessel):
-                switch vessel {
-                case .stainless: .steelTank
-                case .neutralOak: .barrels
-                case .newOak: .newBarrels
-                }
+            case .barrelDown: .barrels
             case .openBleed, .closeBleed, .punchDown: .fermenter
             case .addYeast: .lab
             case .chill: .chiller
@@ -91,14 +82,18 @@ public struct Winemaking: Sendable {
             case .punchDown: .punch
             case .openBleed, .closeBleed, .chill, .cutPress, .press, .loadPress: .valve
             case .addYeast: .taste
-            case .destem, .wholeCluster, .crush, .fill: .valve
+            case .destem, .wholeCluster, .crush, .barrelDown: .valve
             }
         }
+
+        /// The player chooses how (the split at barrel-down), so Doug doesn't
+        /// just do it when he gets there.
+        public var needsChoice: Bool { self == .barrelDown }
 
         /// Seconds Doug is busy with it, and can't walk.
         var duration: Double {
             switch self {
-            case .destem, .wholeCluster, .crush, .loadPress, .fill: 1.4
+            case .destem, .wholeCluster, .crush, .loadPress, .barrelDown: 1.4
             case .press: 1.2
             case .punchDown: 1.0
             case .addYeast: 0.9
@@ -201,7 +196,11 @@ public struct Winemaking: Sendable {
     public private(set) var dryAt: Double?
     public private(set) var pressedAt: Double?
     public private(set) var sugarAtPress: Double?
+    /// Where the wine went: the vessel with the biggest share.
     public private(set) var vessel: Vessel?
+    /// How barrel-down shares the wine out. The player sets it before
+    /// barreling down; new oak only if the winery has the barrels.
+    public var split: VesselSplit
     /// When the juice (or the pressed red) started waiting for its next step.
     public private(set) var juiceSince = 0.0
     private var fermentStart: Double?
@@ -216,6 +215,7 @@ public struct Winemaking: Sendable {
     public init(harvest: Harvest, vessels: [Vessel] = [.stainless, .neutralOak]) {
         self.harvest = harvest
         self.vessels = vessels
+        split = .only(harvest.style == .red ? .neutralOak : .stainless)
         stage = .waiting
         sugar = harvest.brix
         temperature = harvest.fruitTemperature
@@ -339,7 +339,7 @@ public struct Winemaking: Sendable {
         case .pressing:
             actions.append(.cutPress)
         case .juice:
-            actions += vessels.map { .fill($0) }
+            actions.append(.barrelDown)
         case .settling:
             if yeastAt == nil { actions.append(.addYeast) }
             actions.append(.chill(!chilling))
@@ -358,7 +358,7 @@ public struct Winemaking: Sendable {
             actions.append(.press)
             actions.append(.chill(!chilling))
         case .pressed:
-            actions += vessels.map { .fill($0) }
+            actions.append(.barrelDown)
         case .done:
             break
         }
@@ -381,7 +381,8 @@ public struct Winemaking: Sendable {
             walker.stop()
         } else {
             walker.advance(by: dt, stick: stick)
-            if let arrived = walker.arrived, actions(at: arrived).count == 1 {
+            if let arrived = walker.arrived, actions(at: arrived).count == 1,
+               action(at: arrived)?.needsChoice == false {
                 act()
             }
         }
@@ -399,10 +400,13 @@ public struct Winemaking: Sendable {
     }
 
     /// A tap on a machine: Doug walks over and does the job there, unless the
-    /// machine offers a choice (whole clusters at the destemmer), which waits
-    /// for the player.
+    /// job needs a choice (whole clusters at the destemmer, the split at
+    /// barrel-down), which waits for the player. Any tank or barrel will do
+    /// for barrel-down: the hoses reach.
     public mutating func operate(_ station: StationID) {
-        walker.walk(to: station, operate: true)
+        let tanks: [StationID] = [.steelTank, .barrels, .newBarrels]
+        let target: StationID = tanks.contains(station) && actions.contains(.barrelDown) ? .barrels : station
+        walker.walk(to: target, operate: true)
     }
 
     /// Does whatever can be done where Doug stands, or one particular thing
@@ -471,8 +475,9 @@ public struct Winemaking: Sendable {
                 stage = .pressed
                 juiceSince = hours
             }
-        case .fill(let vessel):
-            self.vessel = vessel
+        case .barrelDown:
+            split = split.available(in: vessels)
+            vessel = split.main
             if stage == .juice {
                 stage = .settling
                 clarity = 0
@@ -480,7 +485,7 @@ public struct Winemaking: Sendable {
             } else {
                 stage = .done
             }
-            event(vessel.name, .good, action.station)
+            event(split.used.count > 1 ? "Barreled down" : split.main.name, .good, action.station)
         case .openBleed:
             bleeding = true
             event("Bleeding off rosé", .info, .fermenter)
@@ -534,7 +539,7 @@ public struct Winemaking: Sendable {
                 add(.press, "Free-run juice is flowing. Stop the press before it turns bitter")
             }
         case .juice:
-            add(.steelTank, "Pump the juice into the steel tank or the barrels", urgent: hours - juiceSince > 3)
+            add(.barrels, "Barrel down: steel tanks, neutral or new oak", urgent: hours - juiceSince > 3)
         case .settling:
             if !chilling && temperature > 15 { add(.chiller, "Chill the juice while it settles", urgent: true) }
             if yeastAt == nil {
@@ -576,7 +581,7 @@ public struct Winemaking: Sendable {
                 add(.press, "Dry. Leave it on the skins a little longer")
             }
         case .pressed:
-            add(.newBarrels, "Barrel down: steel tank, neutral or new oak", urgent: hours - juiceSince > 6)
+            add(.barrels, "Barrel down: steel tanks, neutral or new oak", urgent: hours - juiceSince > 6)
         case .done:
             break
         }
@@ -760,7 +765,7 @@ public struct Winemaking: Sendable {
 
     /// What came of it: the changes to the fruit's wine, and why.
     public var result: WinemakingResult {
-        var r = WinemakingResult(vessel: vessel ?? (harvest.style == .white ? .stainless : .neutralOak))
+        var r = WinemakingResult(split: harvest.style == .rose ? .only(.stainless) : split)
         let style = harvest.style
 
         // How long the fruit sat.
@@ -964,7 +969,10 @@ public struct WinemakingResult: Equatable, Sendable {
     /// Cases made, as a share of the usual.
     public var cases = 1.0
     public var faults: [Fault] = []
-    public var vessel: Vessel
+    /// Where it went at barrel-down.
+    public var split: VesselSplit
+    /// The vessel with the most wine.
+    public var vessel: Vessel { split.main }
     /// Red: share bled off for saignée, its color and how good that rosé is.
     public var bleed = 0.0
     public var bleedColor = 0.0
@@ -973,8 +981,8 @@ public struct WinemakingResult: Equatable, Sendable {
     public var roseColor: Double?
     public var volatile = 0.0
 
-    public init(vessel: Vessel) {
-        self.vessel = vessel
+    public init(split: VesselSplit) {
+        self.split = split
     }
 
     public var quality: Double { notes.reduce(0) { $0 + $1.quality } }

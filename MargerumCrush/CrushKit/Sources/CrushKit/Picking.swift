@@ -440,6 +440,27 @@ public struct PickingRound: Sendable {
         }
     }
 
+    /// The crew picks the whole round without you: they take most of the
+    /// fruit and the odd bad bunch, and don't sort for sugar or acid.
+    public mutating func pickAsCrew(seed: UInt64) {
+        var hands = SeededGenerator(seed: seed)
+        var seen = Set<Int>()
+        while !isOver {
+            advance(by: 1.0 / 30)
+            for cluster in clusters where !seen.contains(cluster.id) && cluster.age(at: time) >= 0.6 {
+                seen.insert(cluster.id)
+                let roll = Double.random(in: 0..<1, using: &hands)
+                let take: Bool
+                switch cluster.kind {
+                case .rotten, .sour, .secondCrop: take = roll < 0.12
+                case .leaf, .cane: take = roll < 0.05
+                case .ripe, .greenStem, .shaded, .shot, .raisined, .golden: take = roll < 0.85
+                }
+                if take { pick(cluster.id) }
+            }
+        }
+    }
+
     /// Swats a wasp. It stings, and the clock loses a few seconds.
     @discardableResult
     public mutating func swat(_ id: Int) -> Bool {

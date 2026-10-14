@@ -43,6 +43,8 @@ struct HarvestSection: View {
             ForEach(game.blocks) { block in
                 BlockCard(block: block, canPick: game.canPick(block.id)) { style in
                     pick(block, for: style)
+                } crewPick: { style in
+                    crewPick(block, for: style)
                 }
             }
             weekControls
@@ -71,6 +73,12 @@ struct HarvestSection: View {
     private func pick(_ block: VineyardBlock, for style: WineStyle) {
         guard let round = store.startPicking(block.id, for: style) else { return }
         request = PickRequest(block: block, style: style, round: round)
+    }
+
+    /// The crew picks it without you, and the fruit goes to the crush pad.
+    private func crewPick(_ block: VineyardBlock, for style: WineStyle) {
+        let fruit = store.play { $0.crewPick(block.id, for: style) } ?? nil
+        if fruit != nil { finishingCrush = true }
     }
 
     @ViewBuilder private var weekControls: some View {
@@ -139,6 +147,8 @@ struct BlockCard: View {
     let block: VineyardBlock
     let canPick: Bool
     let pick: (WineStyle) -> Void
+    /// The crew picks it without you: ordinary care, no sorting.
+    let crewPick: (WineStyle) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -165,34 +175,62 @@ struct BlockCard: View {
                     stat("Mold", Format.percent(block.rot), warn: block.rot >= 0.06)
                 }
                 RipenessGauge(block: block)
+                // Rosé first, as on the gauge: it's picked earlier.
                 HStack(spacing: 8) {
-                    RipenessChip(ripeness: block.ripeness(for: block.varietal.mainStyle),
-                                 prefix: block.varietal.isRed ? "Red: " : "")
                     if block.varietal.isRed {
                         RipenessChip(ripeness: block.ripeness(for: .rose), prefix: "Rosé: ")
                     }
+                    RipenessChip(ripeness: block.ripeness(for: block.varietal.mainStyle),
+                                 prefix: block.varietal.isRed ? "Red: " : "")
                 }
-                HStack(spacing: 8) {
-                    Button {
-                        pick(block.varietal.mainStyle)
-                    } label: {
-                        Label(block.varietal.isRed ? "Pick for red" : "Pick", systemImage: "scissors")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    if block.varietal.isRed {
-                        Button {
-                            pick(.rose)
-                        } label: {
-                            Text("Pick for rosé").frame(maxWidth: .infinity)
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        if block.varietal.isRed {
+                            Button {
+                                pick(.rose)
+                            } label: {
+                                Text("Pick for rosé").frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
                         }
-                        .buttonStyle(.bordered)
+                        Button {
+                            pick(block.varietal.mainStyle)
+                        } label: {
+                            Label(block.varietal.isRed ? "Pick for red" : "Pick", systemImage: "scissors")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
+                    crewButton
                 }
                 .disabled(!canPick)
             }
         }
         .card()
+    }
+
+    /// Skips the picking game: the crew brings in the whole crop and the odd
+    /// bad bunch.
+    @ViewBuilder private var crewButton: some View {
+        let label = Label("Let the crew pick it", systemImage: "person.3.fill")
+            .font(.subheadline.weight(.semibold))
+            .frame(maxWidth: .infinity)
+        if block.varietal.isRed {
+            Menu {
+                Button("For rosé") { crewPick(.rose) }
+                Button("For red") { crewPick(.red) }
+            } label: {
+                label
+            }
+            .buttonStyle(.bordered)
+        } else {
+            Button {
+                crewPick(block.varietal.mainStyle)
+            } label: {
+                label
+            }
+            .buttonStyle(.bordered)
+        }
     }
 
     private func stat(_ title: String, _ value: String, warn: Bool = false) -> some View {

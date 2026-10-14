@@ -11,6 +11,8 @@ struct WinemakingView: View {
     @State private var session: Winemaking
     @State private var stick = FloorPoint.zero
     @State private var confirmQuit = false
+    /// Doug at the barrels, waiting to hear how to share the wine out.
+    @State private var barrelDown = false
     @State private var made: [Lot]?
     @State private var result: WinemakingResult?
     /// How the crew (or the autopilot) would do it.
@@ -45,10 +47,17 @@ struct WinemakingView: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: session.punchDowns)
         .confirmationDialog("Leave it to the crew?", isPresented: $confirmQuit, titleVisibility: .visible) {
             Button("The crew can finish it") {
-                session.finish(with: .crew(saignee: false, vessel: plan.vessel))
+                session.finish(with: .crew(saignee: false, split: plan.split))
             }
         } message: {
             Text("They'll get it into tank or barrel, but they won't fuss over it like Doug.")
+        }
+        .sheet(isPresented: $barrelDown) {
+            BarrelDownSheet(split: $session.split, harvest: session.harvest, vessels: session.vessels,
+                            notes: store.game?.barrelNotes(for: session.harvest.varietal) ?? []) {
+                barrelDown = false
+                session.act(.barrelDown)
+            }
         }
     }
 
@@ -63,8 +72,11 @@ struct WinemakingView: View {
             // doesn't skip the fermentation.
             let dt = min(0.1, now.timeIntervalSince(last))
             last = now
+            // The clock waits while the player shares the wine out.
+            guard !barrelDown else { continue }
             if Self.autopilot { session.autopilot(plan) }
             session.advance(by: dt, stick: stick)
+            if session.walker.arrived == .barrels, session.availableAction == .barrelDown { barrelDown = true }
         }
         guard !Task.isCancelled else { return }
         finish()
@@ -123,7 +135,7 @@ struct WinemakingView: View {
     private var actionButton: some View {
         let action = session.availableAction
         return Button {
-            session.act()
+            if action == .barrelDown { barrelDown = true } else { session.act() }
         } label: {
             ZStack {
                 Circle()
@@ -167,7 +179,7 @@ struct WinemakingView: View {
         case .wholeCluster: "leaf.fill"
         case .loadPress, .press: "rectangle.compress.vertical"
         case .cutPress: "stop.fill"
-        case .fill: "arrow.down.to.line"
+        case .barrelDown: "arrow.down.to.line"
         case .openBleed: "drop.fill"
         case .closeBleed: "drop.triangle"
         case .addYeast: "flask.fill"

@@ -1,19 +1,20 @@
 import CrushKit
 import SwiftUI
 
-/// The cellar crew makes the wine: pick red or saignée and the vessel, and
-/// they do the rest. Decent, never inspired: Doug does better on the floor.
+/// The cellar crew makes the wine: pick red or saignée and how to share it
+/// out at barrel-down, and they do the rest. Decent, never inspired: Doug
+/// does better on the floor.
 struct CrushPadView: View {
     @Environment(GameStore.self) private var store
     let harvest: Harvest
     let done: () -> Void
-    @State private var vessel: Vessel
+    @State private var split: VesselSplit
     @State private var method = CrushMethod.red
 
     init(harvest: Harvest, done: @escaping () -> Void) {
         self.harvest = harvest
         self.done = done
-        _vessel = State(initialValue: harvest.style == .white ? .stainless : .neutralOak)
+        _split = State(initialValue: .only(harvest.style == .red ? .neutralOak : .stainless))
     }
 
     var body: some View {
@@ -35,19 +36,9 @@ struct CrushPadView: View {
                                 }
                             }
                         }
-                        SectionTitle(harvest.style == .red ? "Barrels" : "Vessel")
-                        ForEach(vessels, id: \.self) { option in
-                            ChoiceCard(title: option.name, detail: option.blurb, note: cost(of: option),
-                                       selected: vessel == option) {
-                                vessel = option
-                            }
-                        }
-                        if !(store.game?.owns(.frenchOak) ?? false) {
-                            Text("New French oak barrels are in the winter shop.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 4)
-                        }
+                        SectionTitle("Barrel down", detail: "Each vessel is its own lot")
+                        SplitPicker(split: $split, vessels: vessels, tons: harvest.tons,
+                                    notes: store.game?.barrelNotes(for: harvest.varietal) ?? [])
                     }
                 }
                 .padding(16)
@@ -57,7 +48,7 @@ struct CrushPadView: View {
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {
                 Button {
-                    store.play { $0.crush(in: vessel, method: method) }
+                    store.play { $0.crush(split: split, method: method) }
                     done()
                 } label: {
                     Text("The crew makes it").frame(maxWidth: .infinity)
@@ -90,11 +81,6 @@ struct CrushPadView: View {
             ProgressView(value: harvest.quality, total: 100).tint(Theme.wine)
         }
         .card()
-    }
-
-    private func cost(of vessel: Vessel) -> String? {
-        guard vessel.costPerTon > 0 else { return nil }
-        return "\(Format.money(vessel.costPerTon * harvest.tons)) for this lot"
     }
 }
 

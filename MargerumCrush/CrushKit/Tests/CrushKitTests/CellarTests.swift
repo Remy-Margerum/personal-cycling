@@ -98,6 +98,37 @@ final class CellarTests: XCTestCase {
         XCTAssertGreaterThan(steel.profile.acidity, neutral.profile.acidity)
     }
 
+    func testVesselSplitsAddUp() {
+        let split = VesselSplit(stainless: 2, neutralOak: 1, newOak: 1)
+        XCTAssertEqual(split.stainless, 0.5, accuracy: 1e-9)
+        XCTAssertEqual(split[.newOak], 0.25, accuracy: 1e-9)
+        XCTAssertEqual(split.main, .stainless)
+        XCTAssertEqual(VesselSplit(), .only(.neutralOak))
+        // Moving one slider shares the rest out as it was.
+        let more = split.setting(.newOak, to: 0.5)
+        XCTAssertEqual(more.newOak, 0.5, accuracy: 1e-9)
+        XCTAssertEqual(more.stainless, 1.0 / 3, accuracy: 1e-9)
+        XCTAssertEqual(more.neutralOak, 1.0 / 6, accuracy: 1e-9)
+        let steel = VesselSplit.only(.stainless).setting(.stainless, to: 0.6)
+        XCTAssertEqual(steel.neutralOak, 0.2, accuracy: 1e-9)
+        XCTAssertEqual(steel.newOak, 0.2, accuracy: 1e-9)
+        // Without French oak, the sliders share between steel and neutral only.
+        let twoWay = VesselSplit.only(.neutralOak).setting(.neutralOak, to: 0.3, among: [.stainless, .neutralOak])
+        XCTAssertEqual(twoWay.stainless, 0.7, accuracy: 1e-9)
+        XCTAssertEqual(twoWay.newOak, 0)
+        // No French oak yet: its share goes to neutral barrels.
+        let noOak = split.available(in: [.stainless, .neutralOak])
+        XCTAssertEqual(noOak.neutralOak, 0.5, accuracy: 1e-9)
+        XCTAssertEqual(noOak.newOak, 0)
+        XCTAssertEqual(noOak.used, [.stainless, .neutralOak])
+        // Cases are shared out whole and add up.
+        for total in [1, 7, 100, 257] {
+            XCTAssertEqual(split.cases(total).reduce(0) { $0 + $1.cases }, total)
+        }
+        XCTAssertEqual(VesselSplit(stainless: 0.7, neutralOak: 0.2, newOak: 0.1).cases(33).map { $0.cases }, [23, 7, 3])
+        XCTAssertEqual(VesselSplit.only(.newOak).cases(40).map { $0.vessel }, [.newOak])
+    }
+
     func testRoseColorGoesFromPaleToDark() {
         let pale = Varietal.grenache.roseColor(0.1)
         let salmon = Varietal.grenache.roseColor(0.36)
