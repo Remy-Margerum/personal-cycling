@@ -131,6 +131,8 @@ public struct Game: Codable, Equatable, Sendable {
         case offseason
     }
 
+    /// Margerum Wine Company's first vintage. A new winery starts here.
+    public static let firstVintage = 2001
     public static let casesPerTon = 60.0
     public static let pickingCost = 1_200.0
     public static let bottlingCostPerCase = 45.0
@@ -162,6 +164,8 @@ public struct Game: Codable, Equatable, Sendable {
     public private(set) var diary: [DiaryEntry] = []
     /// Last vintage's results, shown in the offseason.
     public private(set) var report: VintageReport?
+    /// The cellar's month after the harvest, 0 (November) to `Aging.last` (July).
+    public private(set) var cellarMonth = 0
     private var rng: SeededGenerator
 
     public init(vintage: Int, seed: UInt64, money: Double = 25_000) {
@@ -178,7 +182,9 @@ public struct Game: Codable, Equatable, Sendable {
 
     // MARK: Harvest
 
-    public var date: String { HarvestCalendar.date(week: week) }
+    public var date: String {
+        phase == .cellar ? Aging.name(cellarMonth) : HarvestCalendar.date(week: week)
+    }
 
     public var crewSize: Int { 1 + (owns(.secondCrew) ? 1 : 0) + (owns(.thirdCrew) ? 1 : 0) }
 
@@ -254,7 +260,7 @@ public struct Game: Codable, Equatable, Sendable {
                               tons: tons, brix: block.brix, acid: block.acid,
                               unripeShare: Double(tally.unripe) / fruit, rotShare: rotten / fruit,
                               sortedOut: sortedOut, picking: round.summary, site: block.site,
-                              character: block.character)
+                              character: block.character, temperature: season[week].actual.fruitTemperature)
         crushPad = harvest
         let purpose = style == .rose ? " for rosé" : ""
         note("Picked \(oneDecimal(tons)) tons of \(block.name)\(purpose) at \(oneDecimal(block.brix))° Brix.")
@@ -264,17 +270,42 @@ public struct Game: Codable, Equatable, Sendable {
     /// Vessels on the crush pad. New oak needs the barrels first.
     public var vessels: [Vessel] { owns(.frenchOak) ? Vessel.allCases : [.stainless, .neutralOak] }
 
-    /// Makes wine from the fruit on the crush pad. Rosé goes straight into
-    /// stainless steel; reds and whites into the vessel chosen.
+    /// Doug's crush for the fruit on the crush pad, to play on the winery floor.
+    public func startWinemaking() -> Winemaking? {
+        guard let harvest = crushPad else { return nil }
+        return Winemaking(harvest: harvest, vessels: vessels)
+    }
+
+    /// Puts the wine from a finished crush into the cellar.
     @discardableResult
-    public mutating func crush(in vessel: Vessel, method: CrushMethod = .red) -> [Lot] {
-        guard let harvest = crushPad else { return [] }
-        let vessel: Vessel = harvest.style == .rose ? .stainless : vessels.contains(vessel) ? vessel : .neutralOak
-        let made = harvest.lots(vessel: vessel, method: harvest.style == .red ? method : .red)
-        bill.oak += harvest.tons * vessel.costPerTon
+    public mutating func finishWinemaking(_ session: Winemaking) -> [Lot] {
+        guard let harvest = crushPad, session.isFinished, session.harvest == harvest else { return [] }
+        let result = session.result
+        let made = harvest.lots(from: result)
+        bill.oak += harvest.tons * result.vessel.costPerTon
         lots += made
         crushPad = nil
+        let best = result.notes.max { $0.quality < $1.quality }
+        let worst = result.notes.min { $0.quality < $1.quality }
+        if let worst, worst.quality <= -2 {
+            note("\(harvest.blockName): \(worst.title.lowercased()).")
+        } else if let best, best.quality >= 1 {
+            note("\(harvest.blockName): \(best.title.lowercased()).")
+        }
         return made
+    }
+
+    /// The cellar crew makes the wine while Doug's busy: decent, not inspired.
+    /// Rosé goes straight into stainless steel; reds and whites into the
+    /// vessel chosen. `skill` is for the simulated players in the tests.
+    @discardableResult
+    public mutating func crush(in vessel: Vessel, method: CrushMethod = .red, skill: Double? = nil) -> [Lot] {
+        guard let harvest = crushPad else { return [] }
+        let vessel: Vessel = harvest.style == .rose ? .stainless : vessels.contains(vessel) ? vessel : .neutralOak
+        var plan = CrushPlan.crew(saignee: harvest.style == .red && method == .saignee, vessel: vessel)
+        if let skill { plan.skill = min(1, max(0, skill)) }
+        let session = Winemaking.played(harvest, vessels: vessels, plan: plan)
+        return finishWinemaking(session)
     }
 
     /// Five days pass, and the fruit ripens (or rots) in the week's weather.
@@ -316,8 +347,9 @@ public struct Game: Codable, Equatable, Sendable {
         let left = blocks.filter { !$0.picked }
         lostTons = left.reduce(0) { $0 + $1.tons }
         if !left.isEmpty { note("The rains came. Still on the vine: \(list(left.map(\.name))).") }
-        note("The harvest is in. Time to blend.")
+        note("The harvest is in. Into the cellar.")
         phase = .cellar
+        cellarMonth = 0
     }
 
     // MARK: Cellar
@@ -344,6 +376,48 @@ public struct Game: Codable, Equatable, Sendable {
         blend.wine.spec.analyze(parts(of: blend))
     }
 
+    /// The same blend as it will taste some months on.
+    public func analyze(_ blend: Blend, monthsAhead months: Int) -> BlendAnalysis {
+        let parts = parts(of: blend).map { (lot: $0.lot.aged(by: months), cases: $0.cases) }
+        return blend.wine.spec.analyze(parts)
+    }
+
+    /// Months left before the release.
+    public var monthsLeft: Int { phase == .cellar ? Aging.last - cellarMonth : 0 }
+
+    /// A month in the cellar: the wine ages, the barrels lose a little to the
+    /// angels. After July the vintage is released.
+    public mutating func nextMonth() {
+        guard phase == .cellar else { return }
+        if cellarMonth >= Aging.last {
+            release()
+            return
+        }
+        cellarMonth += 1
+        for i in lots.indices { lots[i].age() }
+        let dry = Set(lots.filter { $0.sinceTopped == 3 }.map(\.vessel.name))
+        if !dry.isEmpty {
+            note("Nobody topped up the \(list(dry.sorted().map { $0.lowercased() })). Air is getting in.")
+        }
+    }
+
+    /// Doug tops up every barrel of one kind.
+    @discardableResult
+    public mutating func topUp(_ vessel: Vessel) -> Int {
+        guard phase == .cellar, vessel != .stainless else { return 0 }
+        var count = 0
+        for i in lots.indices where lots[i].vessel == vessel && lots[i].sinceTopped > 0 {
+            lots[i].topUp()
+            count += 1
+        }
+        return count
+    }
+
+    /// Barrels that want topping up.
+    public var needsTopping: [Vessel] {
+        Vessel.allCases.filter { vessel in lots.contains { $0.vessel == vessel && $0.needsTopping } }
+    }
+
     /// Bottles a blend. The critic tastes it, and the lots are used up.
     @discardableResult
     public mutating func bottle(_ blend: Blend) -> BottledWine? {
@@ -361,7 +435,7 @@ public struct Game: Codable, Equatable, Sendable {
         let note = TastingNote.write(for: spec, analysis: analysis, score: score, faults: faults, using: &rng)
         let wine = BottledWine(id: UUID(), wine: blend.wine, vintage: vintage, cases: analysis.cases, score: score,
                                note: note, alcohol: analysis.alcohol, color: analysis.color,
-                               composition: analysis.composition)
+                               composition: analysis.composition, month: cellarMonth)
         for part in parts {
             if let i = lots.firstIndex(where: { $0.id == part.lot.id }) { lots[i].cases -= part.cases }
         }

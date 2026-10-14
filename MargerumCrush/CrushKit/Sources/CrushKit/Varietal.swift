@@ -141,6 +141,16 @@ public enum Varietal: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
+    /// A rosé's color for how much it took from the skins: 0 is barely
+    /// blushing, `Winemaking.pink` is pale salmon, 1 is a light red.
+    public func roseColor(_ c: Double) -> RGB {
+        let pale = RGB(0.99, 0.86, 0.80)
+        let salmon = wineColor(for: .rose)
+        let dark = RGB(0.74, 0.20, 0.30)
+        if c <= 0.36 { return pale.mixed(with: salmon, max(0, c) / 0.36) }
+        return salmon.mixed(with: dark, min(1, (c - 0.36) / 0.64))
+    }
+
     /// Flavor words for tasting notes, most typical first.
     func descriptors(for style: WineStyle) -> [String] {
         if style == .rose {

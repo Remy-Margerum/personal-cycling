@@ -28,9 +28,9 @@ final class GameStore {
     }
 
     func newGame() {
-        let year = Calendar.current.component(.year, from: Date())
         let seed = UserDefaults.standard.integer(forKey: "seed")
-        game = Game(vintage: year, seed: seed > 0 ? UInt64(seed) : UInt64.random(in: 1...UInt64.max))
+        // Doug's first Margerum vintage.
+        game = Game(vintage: Game.firstVintage, seed: seed > 0 ? UInt64(seed) : UInt64.random(in: 1...UInt64.max))
         save()
         showTitle = false
     }

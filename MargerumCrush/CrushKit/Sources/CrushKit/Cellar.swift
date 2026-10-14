@@ -63,6 +63,18 @@ public enum Fault: String, Codable, Sendable {
     case green
     /// Too many moldy clusters went in.
     case moldy
+    /// Leaves and canes in the bins: bitter and vegetal.
+    case stemmy
+    /// Sour rot: vinegar from the vineyard.
+    case sour
+    /// The white was pressed too hard: bitter press juice.
+    case bitter
+    /// The red was pressed with sugar left and the fermentation stuck.
+    case sweet
+    /// Too long in the air, on the crush pad or in a barrel nobody topped up.
+    case oxidized
+    /// Vinegar from a dry cap or a late start.
+    case volatile
 }
 
 /// Fruit off the vine, waiting on the crush pad.
@@ -84,6 +96,10 @@ public struct Harvest: Codable, Equatable, Sendable {
     public var picking: PickingRound.Summary
     var site: Double
     var character: TasteProfile
+    /// °C off the truck: the week's weather.
+    public var temperature: Double?
+
+    public var fruitTemperature: Double { temperature ?? 22 }
 
     /// Wine it will make.
     public var cases: Int { Int((tons * Game.casesPerTon).rounded()) }
@@ -160,11 +176,43 @@ public struct Harvest: Codable, Equatable, Sendable {
         }
     }
 
+    /// The wine from Doug's crush, or the crew's: one lot, or two for a saignée.
+    func lots(from r: WinemakingResult) -> [Lot] {
+        let quality = min(100, max(0, self.quality + r.quality))
+        let made = max(1, Int((Double(cases) * r.cases).rounded()))
+        switch style {
+        case .rose:
+            return [lot(name: "\(blockName) Rosé", style: .rose, vessel: .stainless, cases: made,
+                        profile: profile(as: .rose) + r.profile, quality: quality,
+                        color: varietal.roseColor(r.roseColor ?? 0.36), extra: r.faults)]
+        case .white:
+            return [lot(name: blockName, style: .white, vessel: r.vessel, cases: made,
+                        profile: profile(as: .white) + r.profile, quality: quality, extra: r.faults)]
+        case .red:
+            let rose = Int((Double(cases) * r.bleed).rounded())
+            var lots = [lot(name: blockName, style: .red, vessel: r.vessel, cases: cases - rose,
+                            profile: profile(as: .red) + r.profile, quality: quality, extra: r.faults)]
+            if rose > 0 {
+                // Bled off before the red's troubles: only the fruit's own faults.
+                let c = r.bleedColor
+                var pink = profile(as: .rose)
+                pink.body += 2.0 * (c - 0.36)
+                pink.tannin += 3 * max(0, c - 0.42)
+                lots.append(lot(name: "\(blockName) Saignée", style: .rose, vessel: .stainless, cases: rose,
+                                profile: pink, quality: min(100, max(0, self.quality + r.bleedQuality)),
+                                color: varietal.roseColor(c)))
+            }
+            return lots
+        }
+    }
+
     private func lot(name: String, style: WineStyle, vessel: Vessel, cases: Int,
-                     profile: TasteProfile, quality: Double) -> Lot {
-        Lot(id: UUID(), name: name, varietal: varietal, style: style, vessel: vessel, cases: cases,
-            profile: (profile + vessel.effect).clamped(), quality: quality, alcohol: alcohol,
-            color: varietal.wineColor(for: style), faults: faults)
+                     profile: TasteProfile, quality: Double, color: RGB? = nil, extra: [Fault] = []) -> Lot {
+        var all = faults
+        for fault in extra where !all.contains(fault) { all.append(fault) }
+        return Lot(name: name, varietal: varietal, style: style, vessel: vessel, cases: cases,
+                   profile: profile + vessel.effect, quality: quality, alcohol: alcohol,
+                   color: color ?? varietal.wineColor(for: style), faults: all)
     }
 }
 
@@ -177,10 +225,77 @@ public struct Lot: Codable, Equatable, Identifiable, Sendable {
     public var style: WineStyle
     public var vessel: Vessel
     public var cases: Int
-    public var profile: TasteProfile
+    /// How it tastes this month.
+    public private(set) var profile: TasteProfile
     /// 0...100
     public var quality: Double
     public var alcohol: Double
     public var color: RGB
     public var faults: [Fault]
+    /// How it tasted at its reference month (see `Aging`): the cellar's months
+    /// move `profile` away from this.
+    public private(set) var base: TasteProfile
+    /// Months in tank or barrel since the harvest.
+    public private(set) var months = 0
+    /// Months since the barrels were topped up. Steel tanks don't need it.
+    public private(set) var sinceTopped = 0
+    /// Interest from the picking: a share of brown-stemmed, shot-berry or
+    /// perfect bunches. Adds to the critic's score.
+    public var complexity: Double
+
+    public init(id: UUID = UUID(), name: String, varietal: Varietal, style: WineStyle, vessel: Vessel, cases: Int,
+                profile: TasteProfile, quality: Double, alcohol: Double, color: RGB, faults: [Fault],
+                complexity: Double = 0) {
+        self.id = id
+        self.name = name
+        self.varietal = varietal
+        self.style = style
+        self.vessel = vessel
+        self.cases = cases
+        self.base = profile
+        self.profile = profile
+        self.quality = quality
+        self.alcohol = alcohol
+        self.color = color
+        self.faults = faults
+        self.complexity = complexity
+        self.profile = taste(at: 0)
+    }
+
+    /// Barrels lose a little wine every month; topped up every two months
+    /// they never see the air.
+    public var needsTopping: Bool { vessel != .stainless && sinceTopped >= 2 }
+
+    /// How it will taste `months` from now.
+    public func taste(in months: Int) -> TasteProfile { taste(at: self.months + months) }
+
+    func taste(at month: Int) -> TasteProfile {
+        (base + Aging.delta(month, style: style, vessel: vessel)).clamped()
+    }
+
+    /// The same lot `months` older, for projections.
+    public func aged(by months: Int) -> Lot {
+        var lot = self
+        lot.months += months
+        lot.profile = lot.taste(at: lot.months)
+        return lot
+    }
+
+    /// A month in the cellar. Barrels left too long without topping oxidize.
+    mutating func age() {
+        months += 1
+        if vessel != .stainless {
+            sinceTopped += 1
+            if sinceTopped >= 3 {
+                quality = max(0, quality - 1.5)
+                base.fruit -= 0.25
+                if sinceTopped >= 4 && !faults.contains(.oxidized) { faults.append(.oxidized) }
+            }
+        }
+        profile = taste(at: months)
+    }
+
+    mutating func topUp() {
+        sinceTopped = 0
+    }
 }

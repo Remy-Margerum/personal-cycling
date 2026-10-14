@@ -47,6 +47,17 @@ public enum Weather: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// How warm the fruit comes in, °C: picked at dawn, but a heat wave
+    /// still means hot bins.
+    public var fruitTemperature: Double {
+        switch self {
+        case .sunny: 24
+        case .heatWave: 31
+        case .fog: 17
+        case .rain: 16
+        }
+    }
+
     /// Multiplier on a grape's usual five-day sugar gain.
     var ripening: Double {
         switch self {
