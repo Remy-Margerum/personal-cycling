@@ -11,6 +11,14 @@ struct OffseasonSection: View {
             if let report = game.report {
                 ReportCard(report: report)
             }
+            if !game.lots.isEmpty {
+                Label("\(game.lots.reduce(0) { $0 + $1.cases }) cases of \(String(game.vintage)) are staying in barrel "
+                      + "for another year, at \(Format.money(Game.cellarCostPerCase)) a case. Bottle them next year, "
+                      + "on their own or blended in.",
+                      systemImage: "calendar.badge.clock")
+                    .font(.subheadline)
+                    .card()
+            }
             SectionTitle("Invest", detail: "\(Format.money(game.money)) in the bank")
             ForEach(Upgrade.allCases) { upgrade in
                 UpgradeRow(upgrade: upgrade, game: game) {
@@ -67,6 +75,7 @@ struct ReportCard: View {
             line("Grapes", -report.bill.grapes)
             line("Picking crews", -report.bill.picking)
             if report.bill.oak > 0 { line("New oak", -report.bill.oak) }
+            if report.bill.cellar > 0 { line("Last year's wine in barrel", -report.bill.cellar) }
             line("Bottling", -report.bill.bottling)
             Divider()
             HStack {

@@ -79,13 +79,84 @@ final class WinemakingTests: XCTestCase {
         XCTAssertNil(w.act(), "busy")
     }
 
+    func testWholeClustersWantBrownStems() throws {
+        func made(_ bunches: [PickingRound.Kind: Int], whole: Bool) -> WinemakingResult {
+            var fruit = harvest(.syrah)
+            fruit.picking = PickingRound.Summary(bin: PickingRound.Bin(bunches), harvestedShare: 1, missed: 0, stings: 0)
+            var w = Winemaking(harvest: fruit)
+            w.walk(to: .destemmer)
+            for _ in 0..<300 where w.destination != nil { w.advance(by: 1.0 / 30) }
+            XCTAssertEqual(w.actions(at: .destemmer), [.destem, .wholeCluster])
+            XCTAssertEqual(w.act(whole ? .wholeCluster : nil), whole ? .wholeCluster : .destem)
+            w.finish(with: CrushPlan(skill: 1))
+            return w.result
+        }
+        let brown = made([.ripe: 30], whole: true)
+        let destemmed = made([.ripe: 30], whole: false)
+        let green = made([.ripe: 15, .greenStem: 15], whole: true)
+        XCTAssertGreaterThan(brown.quality, destemmed.quality + 2, "\(brown.notes)")
+        XCTAssertGreaterThan(brown.profile.spice, destemmed.profile.spice)
+        XCTAssertGreaterThan(brown.profile.tannin, destemmed.profile.tannin)
+        XCTAssertTrue(green.faults.contains(.stemmy), "stalky")
+        XCTAssertLessThan(green.quality, destemmed.quality)
+        // Only Doug at his best tries it, and only on brown stems.
+        XCTAssertEqual(CrushPlan(skill: 1).next(Winemaking(harvest: harvest(.syrah)), lookahead: true), .wholeCluster)
+        XCTAssertEqual(CrushPlan.crew(saignee: false, vessel: .neutralOak).next(Winemaking(harvest: harvest(.syrah)),
+                                                                               lookahead: true), .destem)
+    }
+
+    func testOneTapSendsDougToWorkAMachine() {
+        // He walks to the press and loads it when he gets there.
+        var w = Winemaking(harvest: harvest(.sauvignonBlanc))
+        w.operate(.press)
+        w.advance(by: 1.0 / 30)
+        XCTAssertEqual(w.stage, .waiting, "still walking")
+        for _ in 0..<300 where w.stage == .waiting { w.advance(by: 1.0 / 30) }
+        XCTAssertEqual(w.stage, .pressing)
+        XCTAssertEqual(w.station, .press)
+        XCTAssertEqual(w.busyWith, .loadPress)
+
+        // The destemmer offers a choice, so he waits for the player.
+        var red = Winemaking(harvest: harvest(.syrah))
+        red.operate(.destemmer)
+        for _ in 0..<300 { red.advance(by: 1.0 / 30) }
+        XCTAssertEqual(red.station, .destemmer)
+        XCTAssertEqual(red.stage, .waiting)
+
+        // Taking the stick calls the errand off.
+        var steered = Winemaking(harvest: harvest(.sauvignonBlanc))
+        steered.operate(.press)
+        steered.advance(by: 1.0 / 30, stick: FloorPoint(-1, 0))
+        for _ in 0..<300 { steered.advance(by: 1.0 / 30) }
+        XCTAssertEqual(steered.stage, .waiting)
+        XCTAssertNil(steered.walker.errand)
+
+        // Barrel-down waits for the player's split, whichever tank he's sent to.
+        var juice = Winemaking(harvest: harvest(.sauvignonBlanc))
+        juice.perform(.loadPress)
+        juice.perform(.cutPress)
+        XCTAssertEqual(juice.stage, .juice)
+        juice.operate(.steelTank)
+        XCTAssertEqual(juice.destination, .barrels)
+        var arrived = false
+        for _ in 0..<600 where !arrived {
+            juice.advance(by: 1.0 / 30)
+            arrived = juice.walker.arrived == .barrels
+        }
+        XCTAssertTrue(arrived)
+        XCTAssertEqual(juice.station, .barrels)
+        XCTAssertEqual(juice.stage, .juice, "waits for the split")
+        XCTAssertEqual(juice.availableAction, .barrelDown)
+    }
+
     func testTheClockRunsSlowAtThePressAndFastInTheFerment() {
         var w = Winemaking(harvest: harvest(.sauvignonBlanc))
         w.perform(.loadPress)
         XCTAssertEqual(w.stage, .pressing)
         let press = w.hoursPerSecond
         w.perform(.cutPress)
-        w.perform(.fill(.stainless))
+        w.split = .only(.stainless)
+        w.perform(.barrelDown)
         w.perform(.addYeast)
         while w.stage != .fermenting { w.advance(by: 0.1) }
         XCTAssertGreaterThan(w.hoursPerSecond, 10 * press)
@@ -180,7 +251,8 @@ final class WinemakingTests: XCTestCase {
         }
         XCTAssertEqual(w.punchDowns, 0)
         w.perform(.press)
-        w.perform(.fill(.neutralOak))
+        w.split = .only(.neutralOak)
+        w.perform(.barrelDown)
         XCTAssertTrue(w.result.faults.contains(.volatile), "\(w.volatile)")
     }
 
@@ -192,7 +264,8 @@ final class WinemakingTests: XCTestCase {
         while w.actions.firstIndex(of: .press) == nil { w.advance(by: 0.1) }
         XCTAssertGreaterThan(w.sugar, 4)
         w.perform(.press)
-        w.perform(.fill(.neutralOak))
+        w.split = .only(.neutralOak)
+        w.perform(.barrelDown)
         XCTAssertTrue(w.result.faults.contains(.sweet))
     }
 
@@ -207,6 +280,29 @@ final class WinemakingTests: XCTestCase {
         XCTAssertEqual(rose.vessel, .stainless)
         XCTAssertEqual(red.cases + rose.cases, fruit.cases)
         XCTAssertTrue(rose.name.hasSuffix("Saignée"))
+    }
+
+    func testBarrelDownSharesTheWineOut() {
+        let fruit = harvest(.syrah, tons: 4)
+        let plan = CrushPlan(skill: 1, split: VesselSplit(stainless: 0.1, neutralOak: 0.6, newOak: 0.3))
+        let w = Winemaking.played(fruit, vessels: Vessel.allCases, plan: plan)
+        XCTAssertEqual(w.result.split.newOak, 0.3, accuracy: 1e-9)
+        XCTAssertEqual(w.result.vessel, .neutralOak)
+        let lots = fruit.lots(from: w.result)
+        XCTAssertEqual(lots.map(\.vessel), [.stainless, .neutralOak, .newOak])
+        XCTAssertEqual(lots.map(\.name), ["Test Syrah, steel", "Test Syrah, neutral oak", "Test Syrah, new oak"])
+        XCTAssertEqual(lots.reduce(0) { $0 + $1.cases }, fruit.cases)
+        XCTAssertGreaterThan(lots[2].taste(in: 5).oak, lots[1].taste(in: 5).oak)
+        // Without French oak, the new-oak share goes to neutral barrels.
+        let noOak = Winemaking.played(fruit, vessels: [.stainless, .neutralOak], plan: plan).result.split
+        XCTAssertEqual(noOak.neutralOak, 0.9, accuracy: 1e-9)
+        XCTAssertEqual(noOak.newOak, 0)
+        // Rosé always goes to steel.
+        let rose = Winemaking.played(harvest(.grenache, style: .rose), vessels: Vessel.allCases, plan: plan)
+        XCTAssertEqual(rose.result.split, .only(.stainless))
+        // One vessel, one lot, under the block's own name.
+        let single = Winemaking.played(fruit, vessels: Vessel.allCases, plan: CrushPlan(skill: 1, vessel: .newOak))
+        XCTAssertEqual(fruit.lots(from: single.result).map(\.name), ["Test Syrah"])
     }
 
     func testTheAutopilotWalksTheFloor() {

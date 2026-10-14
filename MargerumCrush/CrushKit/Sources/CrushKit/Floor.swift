@@ -347,6 +347,11 @@ public struct Doug: Equatable, Sendable {
 public struct Walker: Equatable, Sendable {
     public private(set) var doug: Doug
     public private(set) var destination: StationID?
+    /// Where he was sent to work, not just to stand (a tap on a machine).
+    public private(set) var errand: StationID?
+    /// The machine he got to on an errand this step, if he just did: the
+    /// scene does the job there.
+    public private(set) var arrived: StationID?
     private var route: [FloorPoint] = []
     private var routeTarget: StationID?
 
@@ -357,14 +362,18 @@ public struct Walker: Equatable, Sendable {
     /// The station he's close enough to work.
     public var station: StationID? { Floor.station(near: doug.position) }
 
-    public mutating func walk(to station: StationID?) {
+    /// Sends him to a station; with `operate`, to work it when he gets there.
+    public mutating func walk(to station: StationID?, operate: Bool = false) {
         destination = station
+        errand = operate ? station : nil
         routeTarget = nil
     }
 
     public mutating func advance(by seconds: Double, stick: FloorPoint = .zero) {
+        arrived = nil
         if stick.length > 0.12 {
             destination = nil
+            errand = nil
             doug.walk(stick, seconds: seconds)
         } else if let destination {
             follow(destination, seconds: seconds)
@@ -389,6 +398,8 @@ public struct Walker: Equatable, Sendable {
         guard let next = route.first else {
             destination = nil
             routeTarget = nil
+            if errand == station { arrived = station }
+            errand = nil
             doug.face(station)
             return
         }
@@ -404,6 +415,7 @@ public struct Walker: Equatable, Sendable {
             if route.isEmpty {
                 destination = nil
                 routeTarget = nil
+                errand = nil
             }
         }
     }

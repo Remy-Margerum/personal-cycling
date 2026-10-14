@@ -177,7 +177,7 @@ final class GameTests: XCTestCase {
             XCTAssertEqual(bottled.month, 0)
             XCTAssertFalse(bottled.note.isEmpty)
         }
-        XCTAssertNil(game.bottle(Blend(wine: .sybarite)), "one bottling per wine")
+        XCTAssertNil(game.bottle(Blend(wine: .sybarite)), "nothing left to bottle")
 
         // Two months on, the barrels want topping up.
         game.nextMonth()
@@ -203,7 +203,7 @@ final class GameTests: XCTestCase {
         let uber = try XCTUnwrap(game.bottle(syrahOnly))
         XCTAssertEqual(uber.month, 5)
         XCTAssertEqual(game.lots.map(\.varietal), [.grenache], "the red Grenache is left over")
-        let bulk = game.lots[0].cases
+        let grenacheLot = game.lots[0]
 
         // August: the vintage is released.
         let moneyBefore = game.money
@@ -211,12 +211,124 @@ final class GameTests: XCTestCase {
         let report = try XCTUnwrap(game.report)
         XCTAssertEqual(game.phase, .offseason)
         XCTAssertEqual(report.wines.count, 3)
-        XCTAssertEqual(report.bulkCases, bulk)
+        XCTAssertEqual(report.bulkCases, 0, "the Grenache stays in barrel")
         XCTAssertGreaterThan(report.profit, 50_000)
         XCTAssertEqual(game.money, moneyBefore + report.profit, accuracy: 1e-6)
         XCTAssertEqual(game.library.map(\.wine), [.sybarite, .rose, .uber])
-        XCTAssertTrue(game.lots.isEmpty)
+        XCTAssertEqual(game.library.map(\.vintage), [2001, 2001, 2001])
+        XCTAssertEqual(game.lots.map(\.id), [grenacheLot.id])
+        XCTAssertEqual(game.lots[0].vintage, 2001)
         XCTAssertEqual(report.reputationAfter, game.reputation)
+    }
+
+    /// Plays 2001 without bottling anything: a white and a red go into the
+    /// cellar and stay there.
+    private func unbottledVintage(seed: UInt64) throws -> Game {
+        var game = Game(vintage: Game.firstVintage, seed: seed)
+        for (id, vessel) in [(sb, Vessel.stainless), (syrah, .neutralOak)] {
+            let style = try XCTUnwrap(game.block(id)).varietal.mainStyle
+            var round = try XCTUnwrap(game.startPicking(id, for: style))
+            play(&round)
+            XCTAssertNotNil(game.bringIn(round, from: id, for: style))
+            game.crush(in: vessel)
+            game.nextWeek()
+        }
+        game.finishHarvest()
+        while game.phase == .cellar {
+            game.topUp(.neutralOak)
+            game.nextMonth()
+        }
+        return game
+    }
+
+    func testUnbottledWineAgesIntoTheNextYear() throws {
+        var game = try unbottledVintage(seed: 9)
+        let report = try XCTUnwrap(game.report)
+        XCTAssertEqual(report.bulkCases, 0)
+        XCTAssertEqual(report.bill.cellar, 0)
+        XCTAssertEqual(game.lots.map(\.varietal), [.sauvignonBlanc, .syrah])
+        XCTAssertTrue(game.diary.contains { $0.text.contains("stay in barrel for another year") })
+        let kept = game.lots.reduce(0) { $0 + $1.cases }
+
+        // A year in barrel isn't free.
+        game.startNextVintage()
+        XCTAssertEqual(game.vintage, 2002)
+        XCTAssertEqual(game.bill.cellar, Double(kept) * Game.cellarCostPerCase)
+        XCTAssertEqual(game.lots.map(\.months), [Aging.last, Aging.last])
+
+        // It ages through the summer and the harvest, topped up by the crew:
+        // the second November is month 12.
+        for _ in 0..<HarvestCalendar.weeks { game.nextWeek() }
+        XCTAssertEqual(game.phase, .cellar)
+        XCTAssertEqual(game.lots.map(\.months), [12, 12])
+        XCTAssertTrue(game.lots.allSatisfy { !$0.faults.contains(.oxidized) && !$0.needsTopping })
+        XCTAssertNil(game.blocker(for: .sybarite))
+
+        // Last year's Sybarite goes out under its own vintage.
+        let white = try XCTUnwrap(game.lots(for: .sybarite).first)
+        let blend = Blend(wine: .sybarite, cases: [white.id: white.cases])
+        XCTAssertEqual(game.analyze(blend).vintage, 2001)
+        let sybarite = try XCTUnwrap(game.bottle(blend))
+        XCTAssertEqual(sybarite.vintage, 2001)
+
+        // The Syrah has had its second year: it goes for bulk at this release.
+        let syrahCases = try XCTUnwrap(game.lots.first { $0.varietal == .syrah }).cases
+        while game.phase == .cellar { game.nextMonth() }
+        let second = try XCTUnwrap(game.report)
+        XCTAssertEqual(second.bulkCases, syrahCases)
+        XCTAssertEqual(second.bulkSales, Double(syrahCases) * Game.bulkPricePerCase)
+        XCTAssertTrue(game.lots.isEmpty)
+    }
+
+    func testOldWineFadesWhileRedsSoften() throws {
+        let game = try unbottledVintage(seed: 10)
+        let white = try XCTUnwrap(game.lots.first { $0.style == .white })
+        let red = try XCTUnwrap(game.lots.first { $0.style == .red })
+        // Another year: the white loses its fruit, the red its edges.
+        XCTAssertLessThan(white.taste(in: 4).fruit, white.profile.fruit - 0.3)
+        XCTAssertLessThan(red.taste(in: 4).tannin, red.profile.tannin - 0.1)
+    }
+
+    func testSellingALotInBulk() throws {
+        var game = try unbottledVintage(seed: 11)
+        game.startNextVintage()
+        for _ in 0..<HarvestCalendar.weeks { game.nextWeek() }
+        let syrahLot = try XCTUnwrap(game.lots.first { $0.varietal == .syrah })
+        XCTAssertEqual(game.sellInBulk(syrahLot.id), syrahLot.cases)
+        XCTAssertEqual(game.soldInBulk, syrahLot.cases)
+        XCTAssertFalse(game.lots.contains { $0.id == syrahLot.id })
+        XCTAssertEqual(game.sellInBulk(syrahLot.id), 0, "already sold")
+        let white = try XCTUnwrap(game.lots.first).cases
+        while game.phase == .cellar { game.nextMonth() }
+        XCTAssertEqual(game.report?.bulkCases, syrahLot.cases + white)
+    }
+
+    func testAWineCanBeBottledMoreThanOnce() throws {
+        var game = try unbottledVintage(seed: 12)
+        game.startNextVintage()
+        for _ in 0..<HarvestCalendar.weeks { game.nextWeek() }
+        let white = try XCTUnwrap(game.lots(for: .sybarite).first)
+        let half = white.cases / 2
+        XCTAssertNotNil(game.bottle(Blend(wine: .sybarite, cases: [white.id: half])))
+        XCTAssertNotNil(game.bottle(Blend(wine: .sybarite, cases: [white.id: white.cases - half])))
+        XCTAssertEqual(game.bottled.map(\.wine), [.sybarite, .sybarite])
+        XCTAssertTrue(game.lots(for: .sybarite).isEmpty)
+    }
+
+    func testBlendingAcrossStylesAndVintages() throws {
+        var game = try unbottledVintage(seed: 13)
+        game.startNextVintage()
+        for _ in 0..<HarvestCalendar.weeks { game.nextWeek() }
+        // Anything in the cellar can go to the bench, the wine's own style first.
+        let red = try XCTUnwrap(game.lots.first { $0.style == .red })
+        XCTAssertEqual(game.blendable(for: .uber).map(\.style), [.red, .white])
+        XCTAssertEqual(game.blendable(for: .sybarite).map(\.style), [.white, .red])
+        // A splash of white in a red is fine; a lot of it isn't.
+        let white = try XCTUnwrap(game.lots.first { $0.style == .white })
+        let splash = Blend(wine: .uber, cases: [red.id: 90, white.id: 10])
+        XCTAssertFalse(game.analyze(splash).problems.contains { $0.contains("85% red") }, "\(game.analyze(splash).problems)")
+        let half = Blend(wine: .uber, cases: [red.id: 50, white.id: 50])
+        XCTAssertTrue(game.analyze(half).problems.contains { $0.contains("at least 85% red wine") })
     }
 
     func testUpgradesAndTheNextVintage() {
@@ -241,6 +353,74 @@ final class GameTests: XCTestCase {
         XCTAssertEqual(game.crewSize, 3)
         XCTAssertEqual(game.forecast.count, 3)
         XCTAssertEqual(game.lostTons, 0)
+    }
+
+    func testASplitBarrelDownPaysOnlyForTheNewOak() throws {
+        var game = Game(vintage: Game.firstVintage, seed: 14)
+        for _ in 0..<HarvestCalendar.weeks { game.nextWeek() }
+        game.release()
+        game.setMoney(100_000)
+        XCTAssertTrue(game.buy(.frenchOak))
+        game.startNextVintage()
+        var round = try XCTUnwrap(game.startPicking(syrah, for: .red))
+        play(&round)
+        let fruit = try XCTUnwrap(game.bringIn(round, from: syrah, for: .red))
+        let lots = game.crush(split: VesselSplit(neutralOak: 0.6, newOak: 0.4))
+        XCTAssertEqual(lots.map(\.vessel), [.neutralOak, .newOak])
+        XCTAssertTrue(lots.allSatisfy { $0.vintage == 2002 })
+        XCTAssertEqual(game.bill.oak, fruit.tons * 0.4 * Vessel.newOak.costPerTon, accuracy: 1e-6)
+    }
+
+    func testDougsBarrelNotesSharpenWithEachVintage() throws {
+        func uber(oakMiss: Double) -> BottledWine {
+            BottledWine(id: UUID(), wine: .uber, vintage: 2001, cases: 100, score: 90, note: "", alcohol: 14.5,
+                        color: RGB(0.4, 0.05, 0.1), composition: [], oakMiss: oakMiss)
+        }
+        // At first, only a hunch.
+        let first = Game.barrelNotes(for: .syrah, after: [])
+        XCTAssertEqual(first.map(\.wine), [.uber, .m5])
+        XCTAssertTrue(first.allSatisfy { $0.margin == nil && $0.text.contains("hunch") }, "\(first.map(\.text))")
+        XCTAssertEqual(Game.barrelNotes(for: .grenache, after: []).map(\.wine), [.m5])
+        XCTAssertEqual(Game.barrelNotes(for: .sauvignonBlanc, after: []).map(\.wine), [.sybarite])
+
+        // Each ÜBER bottled narrows it, and the last one's oak says which way to go.
+        var history = [uber(oakMiss: -0.8)]
+        var note = Game.barrelNotes(for: .syrah, after: history)[0]
+        XCTAssertEqual(note.margin, 0.25)
+        XCTAssertTrue(note.text.contains("60%–100% new oak"), note.text)
+        XCTAssertTrue(note.text.contains("came up short"), note.text)
+        history.append(uber(oakMiss: 0.5))
+        note = Game.barrelNotes(for: .syrah, after: history)[0]
+        XCTAssertEqual(note.margin, 0.15)
+        XCTAssertTrue(note.text.contains("70%–100% new oak"), note.text)
+        XCTAssertTrue(note.text.contains("too oaky"), note.text)
+        history.append(uber(oakMiss: 0))
+        note = Game.barrelNotes(for: .syrah, after: history)[0]
+        XCTAssertEqual(note.margin, 0.05)
+        XCTAssertTrue(note.text.contains("about 85% new oak, the rest neutral oak"), note.text)
+        XCTAssertTrue(note.text.contains("was right"), note.text)
+        // The M5 note still knows nothing.
+        XCTAssertNil(Game.barrelNotes(for: .syrah, after: history)[1].margin)
+    }
+
+    func testTheCrewCanPickWithoutYou() throws {
+        var game = Game(vintage: Game.firstVintage, seed: 2)
+        var twin = game
+        let block = try XCTUnwrap(game.block(syrah))
+        let fruit = try XCTUnwrap(game.crewPick(syrah, for: .rose))
+        XCTAssertEqual(fruit.style, .rose)
+        XCTAssertEqual(fruit.tons, block.tons, accuracy: 0.06, "they bring in the whole crop")
+        XCTAssertLessThan(fruit.mogShare, 0.05, "and not much else")
+        XCTAssertEqual(game.picksLeft, 0)
+        XCTAssertEqual(game.block(syrah)?.picked, true)
+        XCTAssertEqual(game.crushPad, fruit)
+        XCTAssertNil(game.crewPick(sb, for: .white), "one crew, one block a week")
+        // Same seed, same pick (sums over the bunch kinds can differ in the
+        // last bit: dictionaries don't promise an order).
+        let again = try XCTUnwrap(twin.crewPick(syrah, for: .rose))
+        XCTAssertEqual(again.picking, fruit.picking)
+        XCTAssertEqual(again.tons, fruit.tons)
+        XCTAssertEqual(again.acid, fruit.acid, accuracy: 1e-9)
     }
 
     func testSavesAndLoads() throws {

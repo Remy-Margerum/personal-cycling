@@ -31,14 +31,16 @@ struct CrushFlowView: View {
         }
     }
 
-    /// How the autopilot would play it: Doug's favorite vessels.
+    /// How the autopilot would play it: Doug's own barrel-down for the wine
+    /// the fruit is headed for (no new oak until the winery has it).
     private func plan(for session: Winemaking) -> CrushPlan {
-        let vessel: Vessel
+        let split: VesselSplit
         switch harvest.style {
-        case .white, .rose: vessel = .stainless
-        case .red: vessel = harvest.varietal == .syrah && session.vessels.contains(.newOak) ? .newOak : .neutralOak
+        case .white: split = WineSpec.sybarite.barrels
+        case .rose: split = .only(.stainless)
+        case .red: split = harvest.varietal == .syrah ? WineSpec.uber.barrels : WineSpec.m5.barrels
         }
-        return CrushPlan(skill: 1, saignee: harvest.varietal == .grenache, vessel: vessel)
+        return CrushPlan(skill: 1, saignee: harvest.varietal == .grenache, split: split)
     }
 }
 
@@ -91,7 +93,8 @@ struct CrushBriefingView: View {
                 }
                 .card()
 
-                Label("Drag the stick to walk Doug, or tap a machine to send him there. When he's next to it, the big button does the job.",
+                Label("Tap a machine and Doug walks over and works it. Or drag the stick to walk him yourself "
+                      + "and use the big button.",
                       systemImage: "hand.tap.fill")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -138,6 +141,16 @@ struct CrushBriefingView: View {
         }
     }
 
+    /// Whether the stems are ripe enough to ferment some bunches whole.
+    private var wholeClusters: String {
+        let green = Format.percent(harvest.greenStems)
+        if harvest.greenStems < 0.2 {
+            return "The stems are brown (\(green) green): keeping a third whole clusters adds spice and structure, "
+                + "most of all to Syrah."
+        }
+        return "\(green) of the fruit is on green stems: whole clusters would taste stalky."
+    }
+
     private struct Step {
         let title: String
         let detail: String
@@ -147,7 +160,8 @@ struct CrushBriefingView: View {
         switch harvest.style {
         case .red:
             return [
-                Step(title: "Destem into the fermenter", detail: "Within \(Int(w.freshFor)) hours, before the fruit warms up."),
+                Step(title: "Destem into the fermenter", detail: "Within \(Int(w.freshFor)) hours, before the fruit warms up. "
+                     + wholeClusters),
                 Step(title: "Saignée, if you like", detail: "Open the bleed valve while the juice is pink, around "
                      + "\(hours(w.pinkHours.lowerBound))–\(hours(w.pinkHours.upperBound)) after destemming. About 20% makes a darker, richer red."),
                 Step(title: "Cold soak, then the yeast", detail: "Add yeast at the lab \(Int(w.yeastWindow.lowerBound))–"
@@ -155,7 +169,8 @@ struct CrushBriefingView: View {
                 Step(title: "Punch down and keep it cool", detail: "Punch down when the cap dries out. Keep it 24–31 °C with the chiller."),
                 Step(title: "Press", detail: w.macerationHours <= 6 ? "As soon as it's dry: green tannins get harsher."
                      : "About \(hours(w.macerationHours)) after it goes dry: ripe tannins love the extra time."),
-                Step(title: "Barrel down", detail: "Steel, neutral oak or new French oak."),
+                Step(title: "Barrel down", detail: "Share it out between steel, neutral oak and new French oak. "
+                     + "Doug's notes at the barrels say where to aim, and get surer every vintage."),
             ]
         case .rose:
             return [
@@ -168,7 +183,8 @@ struct CrushBriefingView: View {
             return [
                 Step(title: "Load the press", detail: "Whole clusters, within \(Int(w.freshFor)) hours."),
                 Step(title: "Stop the press", detail: "Before the bitter press juice: around \(Format.one(w.pressKnee * 2)) bar for this fruit."),
-                Step(title: "Into tank or barrel", detail: "Steel for zip, neutral oak for a rounder Sybarite."),
+                Step(title: "Barrel down", detail: "Steel for zip, a little neutral oak for a rounder Sybarite: "
+                     + "share it out as you like."),
                 Step(title: "Chill, settle, add yeast", detail: "Cold settle with the chiller on, then the yeast once it's clear."),
             ]
         }

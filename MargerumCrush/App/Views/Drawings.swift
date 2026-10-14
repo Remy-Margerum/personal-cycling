@@ -87,7 +87,7 @@ struct ClusterSprite: View {
                 .padding(8)
         } else {
             GrapeCluster(color: kind.color(for: varietal), mold: kind == .rotten || kind == .sour, sparkle: kind == .golden)
-                .scaleEffect(kind == .wing ? 0.7 : 1, anchor: .top)
+                .scaleEffect(kind == .secondCrop ? 0.7 : 1, anchor: .top)
         }
     }
 }

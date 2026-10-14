@@ -85,8 +85,10 @@ public struct Bill: Codable, Equatable, Sendable {
     public var picking = 0.0
     public var oak = 0.0
     public var bottling = 0.0
+    /// Keeping last year's wine in barrel another year.
+    public var cellar = 0.0
 
-    public var total: Double { grapes + picking + oak + bottling }
+    public var total: Double { grapes + picking + oak + bottling + cellar }
 }
 
 /// How the vintage sold.
@@ -137,6 +139,8 @@ public struct Game: Codable, Equatable, Sendable {
     public static let pickingCost = 1_200.0
     public static let bottlingCostPerCase = 45.0
     public static let bulkPricePerCase = 30.0
+    /// A year in barrel for wine kept past the release.
+    public static let cellarCostPerCase = 6.0
     /// The share of the shelf price the winery keeps after distributors and shops.
     public static let wineryShare = 0.5
 
@@ -166,6 +170,8 @@ public struct Game: Codable, Equatable, Sendable {
     public private(set) var report: VintageReport?
     /// The cellar's month after the harvest, 0 (November) to `Aging.last` (July).
     public private(set) var cellarMonth = 0
+    /// Cases sold off in bulk this vintage, so far.
+    public private(set) var soldInBulk = 0
     private var rng: SeededGenerator
 
     public init(vintage: Int, seed: UInt64, money: Double = 25_000) {
@@ -236,6 +242,15 @@ public struct Game: Codable, Equatable, Sendable {
         return PickingRound(block: block, style: style, weather: season[week].actual, duration: duration, seed: rng.next())
     }
 
+    /// The crew picks a block without you: ordinary care, no sorting. Same
+    /// as a round you play, minus the choices.
+    @discardableResult
+    public mutating func crewPick(_ blockID: String, for style: WineStyle) -> Harvest? {
+        guard var round = startPicking(blockID, for: style) else { return nil }
+        round.pickAsCrew(seed: rng.next())
+        return bringIn(round, from: blockID, for: style)
+    }
+
     /// Brings in the fruit from a finished round. It waits on the crush pad
     /// until `crush` decides what to make of it. Picking nothing leaves the
     /// block hanging, but the crew's week is still spent.
@@ -251,13 +266,14 @@ public struct Game: Codable, Equatable, Sendable {
             return nil
         }
         blocks[index].picked = true
-        // The sorting table catches most of the moldy and sour bunches, and
-        // the leaves and canes.
+        // The sorting table catches most of the leaves and canes, and the
+        // moldy bunches; sour rot is harder to spot.
         var bin = round.bin
         var sortedOut = 0
         if owns(.sortingTable) {
-            for kind in [PickingRound.Kind.rotten, .sour, .leaf, .cane] {
-                let n = Int((Double(bin.count(kind)) * 0.75).rounded())
+            let caught: [(PickingRound.Kind, Double)] = [(.rotten, 0.7), (.sour, 0.5), (.leaf, 0.85), (.cane, 0.9)]
+            for (kind, share) in caught {
+                let n = Int((Double(bin.count(kind)) * share).rounded())
                 for _ in 0..<n { bin.remove(kind) }
                 sortedOut += n
             }
@@ -292,8 +308,9 @@ public struct Game: Codable, Equatable, Sendable {
     public mutating func finishWinemaking(_ session: Winemaking) -> [Lot] {
         guard let harvest = crushPad, session.isFinished, session.harvest == harvest else { return [] }
         let result = session.result
-        let made = harvest.lots(from: result)
-        bill.oak += harvest.tons * result.vessel.costPerTon
+        var made = harvest.lots(from: result)
+        for i in made.indices { made[i].vintage = vintage }
+        bill.oak += harvest.tons * result.split.newOak * Vessel.newOak.costPerTon
         lots += made
         crushPad = nil
         let best = result.notes.max { $0.quality < $1.quality }
@@ -308,12 +325,16 @@ public struct Game: Codable, Equatable, Sendable {
 
     /// The cellar crew makes the wine while Doug's busy: decent, not inspired.
     /// Rosé goes straight into stainless steel; reds and whites into the
-    /// vessel chosen. `skill` is for the simulated players in the tests.
+    /// vessels chosen. `skill` is for the simulated players in the tests.
     @discardableResult
     public mutating func crush(in vessel: Vessel, method: CrushMethod = .red, skill: Double? = nil) -> [Lot] {
+        crush(split: .only(vessel), method: method, skill: skill)
+    }
+
+    @discardableResult
+    public mutating func crush(split: VesselSplit, method: CrushMethod = .red, skill: Double? = nil) -> [Lot] {
         guard let harvest = crushPad else { return [] }
-        let vessel: Vessel = harvest.style == .rose ? .stainless : vessels.contains(vessel) ? vessel : .neutralOak
-        var plan = CrushPlan.crew(saignee: harvest.style == .red && method == .saignee, vessel: vessel)
+        var plan = CrushPlan.crew(saignee: harvest.style == .red && method == .saignee, split: split)
         if let skill { plan.skill = min(1, max(0, skill)) }
         let session = Winemaking.played(harvest, vessels: vessels, plan: plan)
         return finishWinemaking(session)
@@ -359,15 +380,32 @@ public struct Game: Codable, Equatable, Sendable {
         lostTons = left.reduce(0) { $0 + $1.tons }
         if !left.isEmpty { note("The rains came. Still on the vine: \(list(left.map(\.name))).") }
         note("The harvest is in. Into the cellar.")
+        // Last year's wine aged on through the summer and the harvest, and the
+        // crew kept the barrels topped up.
+        for i in lots.indices where lots[i].vintage < vintage {
+            for _ in 0..<4 {
+                lots[i].topUp()
+                lots[i].age()
+            }
+        }
         phase = .cellar
         cellarMonth = 0
     }
 
     // MARK: Cellar
 
-    /// Lots that can go into a wine: the right style, with wine left.
+    /// Lots of a wine's style, with wine left.
     public func lots(for wine: WineID) -> [Lot] {
         lots.filter { $0.style == wine.spec.style && $0.cases > 0 }
+    }
+
+    /// Everything that could go into a wine at the lab bench: its own style
+    /// first, this year's before last year's, then the rest.
+    public func blendable(for wine: WineID) -> [Lot] {
+        let style = wine.spec.style
+        return lots.filter { $0.cases > 0 }.sorted {
+            ($0.style == style ? 0 : 1, -$0.vintage) < ($1.style == style ? 0 : 1, -$1.vintage)
+        }
     }
 
     public func hasBottled(_ wine: WineID) -> Bool { bottled.contains { $0.wine == wine } }
@@ -375,7 +413,6 @@ public struct Game: Codable, Equatable, Sendable {
     /// Why a wine can't be made this vintage, or nil if it can.
     public func blocker(for wine: WineID) -> String? {
         let spec = wine.spec
-        if hasBottled(wine) { return "Bottled" }
         let available = lots(for: wine)
         if available.isEmpty { return "No \(spec.style.name.lowercased()) wine in the cellar" }
         let missing = spec.requiredVarietals.filter { grape in !available.contains { $0.varietal == grape } }
@@ -432,7 +469,7 @@ public struct Game: Codable, Equatable, Sendable {
     /// Bottles a blend. The critic tastes it, and the lots are used up.
     @discardableResult
     public mutating func bottle(_ blend: Blend) -> BottledWine? {
-        guard phase == .cellar, !hasBottled(blend.wine) else { return nil }
+        guard phase == .cellar else { return nil }
         let parts = parts(of: blend)
         let spec = blend.wine.spec
         let analysis = spec.analyze(parts)
@@ -444,9 +481,10 @@ public struct Game: Codable, Equatable, Sendable {
             faults.formUnion(part.lot.faults)
         }
         let note = TastingNote.write(for: spec, analysis: analysis, score: score, faults: faults, using: &rng)
-        let wine = BottledWine(id: UUID(), wine: blend.wine, vintage: vintage, cases: analysis.cases, score: score,
-                               note: note, alcohol: analysis.alcohol, color: analysis.color,
-                               composition: analysis.composition, month: cellarMonth)
+        let wine = BottledWine(id: UUID(), wine: blend.wine, vintage: analysis.vintage ?? vintage, cases: analysis.cases,
+                               score: score, note: note, alcohol: analysis.alcohol, color: analysis.color,
+                               composition: analysis.composition, month: cellarMonth,
+                               oakMiss: analysis.misses[.oak] ?? 0)
         for part in parts {
             if let i = lots.firstIndex(where: { $0.id == part.lot.id }) { lots[i].cases -= part.cases }
         }
@@ -454,6 +492,71 @@ public struct Game: Codable, Equatable, Sendable {
         bill.bottling += Double(analysis.cases) * Self.bottlingCostPerCase
         bottled.append(wine)
         return wine
+    }
+
+    /// Sells a lot off as bulk wine, paid at the release.
+    @discardableResult
+    public mutating func sellInBulk(_ lotID: UUID) -> Int {
+        guard phase == .cellar, let i = lots.firstIndex(where: { $0.id == lotID }) else { return 0 }
+        let cases = lots[i].cases
+        soldInBulk += cases
+        lots.remove(at: i)
+        return cases
+    }
+
+    /// Doug's notes at barrel-down: how to share a grape out between steel,
+    /// neutral and new oak for the wines it might go into. A hunch at first;
+    /// each vintage of that wine bottled sharpens it, and the last bottling's
+    /// oak says which way to move.
+    public func barrelNotes(for varietal: Varietal) -> [BarrelNote] {
+        Self.barrelNotes(for: varietal, after: library + bottled)
+    }
+
+    /// Doug's notes, given the wines bottled so far, oldest first.
+    static func barrelNotes(for varietal: Varietal, after history: [BottledWine]) -> [BarrelNote] {
+        let wines: [WineID]
+        switch varietal {
+        case .sauvignonBlanc: wines = [.sybarite]
+        case .syrah: wines = [.uber, .m5]
+        case .grenache, .mourvedre, .counoise, .cinsault: wines = [.m5]
+        }
+        return wines.map { wine in
+            let made = history.filter { $0.wine == wine }
+            let margin: Double? = switch made.count {
+            case 0: nil
+            case 1: 0.25
+            case 2: 0.15
+            default: 0.05
+            }
+            let target = wine.spec.barrels
+            var text = "\(wine.spec.name): " + Self.describe(target, margin: margin) + "."
+            if let miss = made.last?.oakMiss {
+                text += miss < -0.1 ? " Last time the oak came up short." : miss > 0.1 ? " Last time it was too oaky."
+                    : " Last time the oak was right."
+            }
+            return BarrelNote(wine: wine, text: text, target: target, margin: margin)
+        }
+    }
+
+    private static func describe(_ split: VesselSplit, margin: Double?) -> String {
+        func pct(_ share: Double) -> String { "\(Int((share * 20).rounded()) * 5)%" }
+        let main = split.main
+        let rest = Vessel.allCases.filter { $0 != main && split[$0] > 0 }.max { split[$0] < split[$1] }
+        guard let margin else {
+            switch main {
+            case .newOak: return "Doug's hunch is mostly new French oak"
+            case .stainless: return "Doug's hunch is mostly steel, with a touch of neutral oak and no new oak"
+            case .neutralOak: return split.newOak > 0 ? "Doug's hunch is mostly neutral barrels, with a few new ones"
+                                                      : "Doug's hunch is neutral barrels"
+            }
+        }
+        let share = split[main]
+        let range = margin <= 0.05 ? "about \(pct(share))"
+            : "\(pct(max(0, share - margin)))–\(pct(min(1, share + margin)))"
+        var text = "\(range) \(main.short)"
+        if let rest { text += ", the rest \(rest.short)" }
+        if main != .newOak && split.newOak == 0 { text += ", no new oak" }
+        return text
     }
 
     /// Shelf price per bottle. Scores and reputation sell wine.
@@ -464,8 +567,9 @@ public struct Game: Codable, Equatable, Sendable {
         return (wine.spec.price * scoreFactor * fame * tastingRoom).rounded()
     }
 
-    /// Sells the vintage: bottled wine at its price, anything left over as
-    /// bulk wine. Pays the bill, and the offseason begins.
+    /// Sells the vintage: bottled wine at its price, and as bulk wine what
+    /// was sold off and anything left from last year. This year's leftovers
+    /// stay in barrel. Pays the bill, and the offseason begins.
     @discardableResult
     public mutating func release() -> VintageReport? {
         guard phase == .cellar else { return nil }
@@ -474,7 +578,15 @@ public struct Game: Codable, Equatable, Sendable {
             wine.revenue = Double(wine.cases * 12) * price(of: wine.wine, score: wine.score) * Self.wineryShare
             return wine
         }
-        let bulkCases = lots.reduce(0) { $0 + $1.cases }
+        // This year's unbottled wine stays in barrel for another year; last
+        // year's, kept a year already, goes for bulk.
+        lots.removeAll { $0.cases <= 0 }
+        let tooOld = lots.filter { $0.vintage < vintage }.reduce(0) { $0 + $1.cases }
+        lots.removeAll { $0.vintage < vintage }
+        if tooOld > 0 { note("\(tooOld) cases of last year's wine went for bulk.") }
+        let kept = lots.reduce(0) { $0 + $1.cases }
+        if kept > 0 { note("\(kept) cases stay in barrel for another year.") }
+        let bulkCases = soldInBulk + tooOld
         var report = VintageReport(vintage: vintage, wines: sold, bulkCases: bulkCases,
                                    bulkSales: Double(bulkCases) * Self.bulkPricePerCase, lostTons: lostTons,
                                    bill: bill, reputationBefore: reputation, reputationAfter: reputation)
@@ -487,7 +599,6 @@ public struct Game: Codable, Equatable, Sendable {
         report.reputationAfter = reputation
         money += report.profit
         library += sold
-        lots = []
         bottled = []
         self.report = report
         phase = .offseason
@@ -523,9 +634,12 @@ public struct Game: Codable, Equatable, Sendable {
         week = 0
         picksThisWeek = 0
         crushPad = nil
-        lots = []
+        // Wine kept from last year carries on in its barrels.
+        lots.removeAll { $0.cases <= 0 }
         bottled = []
         bill = Bill()
+        bill.cellar = Double(lots.reduce(0) { $0 + $1.cases }) * Self.cellarCostPerCase
+        soldInBulk = 0
         lostTons = 0
         diary = []
         for i in blocks.indices { blocks[i].startVintage(using: &rng) }

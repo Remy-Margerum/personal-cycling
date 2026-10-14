@@ -1,8 +1,8 @@
 import CrushKit
 import SwiftUI
 
-/// Doug's crush, played on the winery floor: walk him to each machine (drag
-/// the stick, or tap a machine) and do each job at the right moment.
+/// Doug's crush, played on the winery floor: tap a machine and he walks over
+/// and works it (or steer him with the stick), each job at the right moment.
 struct WinemakingView: View {
     /// The screenshot tour (UITests) launches with -autopick: Doug plays himself.
     private static let autopilot = ProcessInfo.processInfo.arguments.contains("-autopick")
@@ -11,6 +11,8 @@ struct WinemakingView: View {
     @State private var session: Winemaking
     @State private var stick = FloorPoint.zero
     @State private var confirmQuit = false
+    /// Doug at the barrels, waiting to hear how to share the wine out.
+    @State private var barrelDown = false
     @State private var made: [Lot]?
     @State private var result: WinemakingResult?
     /// How the crew (or the autopilot) would do it.
@@ -45,10 +47,17 @@ struct WinemakingView: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: session.punchDowns)
         .confirmationDialog("Leave it to the crew?", isPresented: $confirmQuit, titleVisibility: .visible) {
             Button("The crew can finish it") {
-                session.finish(with: .crew(saignee: false, vessel: plan.vessel))
+                session.finish(with: .crew(saignee: false, split: plan.split))
             }
         } message: {
             Text("They'll get it into tank or barrel, but they won't fuss over it like Doug.")
+        }
+        .sheet(isPresented: $barrelDown) {
+            BarrelDownSheet(split: $session.split, harvest: session.harvest, vessels: session.vessels,
+                            notes: store.game?.barrelNotes(for: session.harvest.varietal) ?? []) {
+                barrelDown = false
+                session.act(.barrelDown)
+            }
         }
     }
 
@@ -63,8 +72,11 @@ struct WinemakingView: View {
             // doesn't skip the fermentation.
             let dt = min(0.1, now.timeIntervalSince(last))
             last = now
+            // The clock waits while the player shares the wine out.
+            guard !barrelDown else { continue }
             if Self.autopilot { session.autopilot(plan) }
             session.advance(by: dt, stick: stick)
+            if session.walker.arrived == .barrels, session.availableAction == .barrelDown { barrelDown = true }
         }
         guard !Task.isCancelled else { return }
         finish()
@@ -79,12 +91,9 @@ struct WinemakingView: View {
         }
     }
 
+    /// One tap: Doug walks to the machine and works it.
     private func tap(_ station: StationID) {
-        if session.station == station, session.availableAction != nil {
-            session.act()
-        } else {
-            session.walk(to: station)
-        }
+        session.operate(station)
     }
 
     // MARK: Controls
@@ -94,6 +103,22 @@ struct WinemakingView: View {
             Joystick(stick: $stick)
             Spacer(minLength: 0)
             VStack(spacing: 8) {
+                if let other = otherAction {
+                    Button {
+                        session.act(other)
+                    } label: {
+                        Label(other.name, systemImage: symbol(other))
+                            .font(.caption.weight(.bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Theme.gold, in: Capsule())
+                            .foregroundStyle(Theme.ink)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: 170)
+                }
                 actionButton
                 if let station = session.station {
                     Text(station.name)
@@ -110,7 +135,7 @@ struct WinemakingView: View {
     private var actionButton: some View {
         let action = session.availableAction
         return Button {
-            session.act()
+            if action == .barrelDown { barrelDown = true } else { session.act() }
         } label: {
             ZStack {
                 Circle()
@@ -141,12 +166,20 @@ struct WinemakingView: View {
         .accessibilityLabel(action?.name ?? "Nothing to do here")
     }
 
+    /// A second job at this machine, if it has one: whole clusters at the
+    /// destemmer.
+    private var otherAction: Winemaking.Action? {
+        guard session.busy <= 0, let station = session.station else { return nil }
+        return session.actions(at: station).dropFirst().first
+    }
+
     private func symbol(_ action: Winemaking.Action) -> String {
         switch action {
         case .destem, .crush: "gearshape.2.fill"
+        case .wholeCluster: "leaf.fill"
         case .loadPress, .press: "rectangle.compress.vertical"
         case .cutPress: "stop.fill"
-        case .fill: "arrow.down.to.line"
+        case .barrelDown: "arrow.down.to.line"
         case .openBleed: "drop.fill"
         case .closeBleed: "drop.triangle"
         case .addYeast: "flask.fill"
@@ -294,10 +327,7 @@ struct CrushHUD: View {
     }
 
     /// White: juice so far, as a share of the usual.
-    private var pressYield: Double {
-        let p = session.pressProgress
-        return 0.68 + 0.37 * (1 - (1 - p) * (1 - p))
-    }
+    private var pressYield: Double { Winemaking.pressYield(session.pressProgress) }
 
     private var sinceDry: Double { session.hours - (session.dryAt ?? session.hours) }
 
@@ -335,7 +365,7 @@ struct CrushHUD: View {
             case .pressing:
                 Meter(title: "Press", value: s.pressProgress, range: 0...1, good: 0...s.pressKnee,
                       text: "\(Format.one(s.pressProgress * 2)) bar")
-                Meter(title: "Juice", value: pressYield, range: 0.6...1.05, good: 0.6...1.05, text: Format.percent(pressYield))
+                Meter(title: "Juice", value: pressYield, range: 0...1.05, good: 0.55...1.05, text: Format.percent(pressYield))
             case .skinContact:
                 Meter(title: "Color", value: s.color, range: 0...0.7, good: Winemaking.pink, text: "\(Int(s.hours.rounded())) h",
                       tint: Color(s.harvest.varietal.roseColor(s.color)))

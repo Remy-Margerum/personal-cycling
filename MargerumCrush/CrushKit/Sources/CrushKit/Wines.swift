@@ -45,29 +45,29 @@ public struct WineSpec: Sendable {
     public static let sybarite = WineSpec(
         id: .sybarite, name: "Sybarite", kind: "Sauvignon Blanc", style: .white, price: 32,
         blurb: "Crisp, citrusy Happy Canyon Sauvignon Blanc. Unoaked, and at least 75% Sauvignon Blanc.",
-        target: [.fruit: 6.5...8.0, .acidity: 7.5...9.0, .tannin: 0.0...1.0,
+        target: [.fruit: 6.5...8.0, .acidity: 7.0...8.8, .tannin: 0.0...1.0,
                  .body: 3.2...4.6, .spice: 2.0...3.5, .oak: 0.0...1.0],
         rule: .varietal(.sauvignonBlanc, 0.75))
 
     public static let rose = WineSpec(
         id: .rose, name: "Rosé", kind: "Rosé of Rhône grapes", style: .rose, price: 28,
         blurb: "Pale, dry and bright, from red grapes picked early or bled off for saignée.",
-        target: [.fruit: 6.5...8.2, .acidity: 7.0...8.5, .tannin: 0.0...1.0,
+        target: [.fruit: 6.5...8.2, .acidity: 7.0...8.8, .tannin: 0.0...1.0,
                  .body: 2.5...4.0, .spice: 1.0...2.8, .oak: 0.0...0.5],
         rule: .any)
 
     public static let m5 = WineSpec(
         id: .m5, name: "M5", kind: "Red Rhône blend", style: .red, price: 48,
         blurb: "The five-grape blend: Syrah, Grenache, Mourvèdre, Counoise and Cinsault. All five have to be in it.",
-        target: [.fruit: 6.8...8.2, .acidity: 5.0...6.2, .tannin: 5.5...6.8,
-                 .body: 6.3...7.6, .spice: 5.6...7.2, .oak: 2.0...3.2],
+        target: [.fruit: 6.8...8.2, .acidity: 5.0...6.2, .tannin: 5.2...6.6,
+                 .body: 6.3...7.6, .spice: 5.6...7.2, .oak: 1.4...2.8],
         rule: .allFive)
 
     public static let uber = WineSpec(
         id: .uber, name: "ÜBER Syrah", kind: "Syrah", style: .red, price: 70,
         blurb: "Big, dark, over-the-top Syrah from new French oak. At least 75% Syrah.",
-        target: [.fruit: 7.5...9.5, .acidity: 4.0...5.5, .tannin: 7.2...9.0,
-                 .body: 8.2...9.5, .spice: 4.5...7.0, .oak: 4.0...6.0],
+        target: [.fruit: 7.5...9.5, .acidity: 4.5...6.0, .tannin: 6.8...8.8,
+                 .body: 8.2...9.5, .spice: 5.0...7.5, .oak: 4.0...6.0],
         rule: .varietal(.syrah, 0.75))
 
     /// The grapes the rule asks for, for showing what's missing.
@@ -96,8 +96,20 @@ public struct WineSpec: Sendable {
 
         var problems: [String] = []
         if cases == 0 { problems.append("Add some wine.") }
-        for part in used where part.lot.style != style {
-            problems.append("\(part.lot.name) is \(part.lot.style.name.lowercased()); \(name) has to be \(style.name.lowercased()).")
+        // Blend as you like, within what the label allows: a little white in
+        // a red is fine (Côte-Rôtie does it), but it has to be mostly the
+        // right color...
+        let inStyle = used.filter { $0.lot.style == style }.reduce(0) { $0 + $1.cases }
+        if cases > 0 && Double(inStyle) < 0.85 * total {
+            problems.append("\(name) has to be at least 85% \(style.name.lowercased()) wine. Now \(percent(Double(inStyle) / total)).")
+        }
+        // ...and 85% from one harvest to put a vintage on it.
+        var byVintage: [Int: Int] = [:]
+        for part in used { byVintage[part.lot.vintage, default: 0] += part.cases }
+        let main = byVintage.sorted { ($0.value, $0.key) > ($1.value, $1.key) }.first
+        if cases > 0, let main, Double(main.value) < 0.85 * total {
+            problems.append("A vintage on the label needs 85% from one harvest. Now \(percent(Double(main.value) / total)) "
+                            + "from \(main.key).")
         }
         switch rule {
         case .varietal(let grape, let minimum):
@@ -127,11 +139,14 @@ public struct WineSpec: Sendable {
         let grapes = composition.filter { $0.share >= 0.05 }.count
         let complexity = 0.75 * Double(max(0, grapes - 1)) + (grapes >= 5 ? 1 : 0)
         let hot = 2 * max(0, alcohol - 15.5)
-        let raw = 61 + 0.35 * quality + complexity - stylePenalty - hot
+        // Bottled before it settled, or before the reds came together.
+        let young = used.reduce(0) { $0 + Aging.youth($1.lot.style, months: $1.lot.months) * Double($1.cases) } / total
+        let raw = 61 + 0.35 * quality + complexity - stylePenalty - hot - young
         let score = cases > 0 ? Int(min(100, max(70, raw)).rounded()) : 0
 
         return BlendAnalysis(cases: cases, profile: profile, quality: quality, alcohol: alcohol, color: color,
-                             composition: composition, problems: problems, misses: misses, score: score)
+                             composition: composition, problems: problems, misses: misses, young: young, score: score,
+                             vintage: main?.key)
     }
 }
 
@@ -166,8 +181,12 @@ public struct BlendAnalysis: Equatable, Sendable {
     public var problems: [String]
     /// How far each dimension is outside the target: negative is too little.
     public var misses: [TasteProfile.Dimension: Double]
+    /// Points lost to bottling too soon (see `Aging.youth`).
+    public var young: Double
     /// The winemaker's estimate. The critic may land a point either side.
     public var score: Int
+    /// The harvest most of it came from: the vintage on the label.
+    public var vintage: Int?
 
     public var canBottle: Bool { problems.isEmpty && cases > 0 }
 }
@@ -187,6 +206,9 @@ public struct BottledWine: Codable, Equatable, Identifiable, Sendable {
     public var revenue: Double?
     /// The cellar month it was bottled (see `Aging.months`).
     public var month: Int?
+    /// How far its oak landed outside Doug's range (negative: too little).
+    /// Doug's notes at barrel-down learn from it.
+    public var oakMiss: Double?
 
     public var spec: WineSpec { wine.spec }
     public var verdict: String { Self.verdict(score) }
@@ -260,6 +282,10 @@ enum TastingNote {
         if faults.contains(.sweet) { sentences.append("A touch of sugar left behind: the fermentation stuck.") }
         if faults.contains(.oxidized) { sentences.append("Tired, nutty and a little brown.") }
         if analysis.alcohol > 15.5 { sentences.append("The alcohol runs hot on the finish.") }
+        if analysis.young >= 1 {
+            sentences.append(spec.style == .red ? "Bottled young: the oak and tannin haven't come together yet."
+                                                : "Bottled young, before it settled: a little raw.")
+        }
 
         switch score {
         case 98...: sentences.append("A benchmark for Santa Barbara County.")
@@ -289,4 +315,32 @@ func list(_ items: [String]) -> String {
 /// "75%"
 func percent(_ share: Double) -> String {
     "\(Int((share * 100).rounded()))%"
+}
+
+extension WineSpec {
+    /// How Doug barrels down the wine for it, from the Margerum tech sheets
+    /// (nudged to fit the game's oak): Sybarite mostly steel with a little
+    /// neutral oak, M5 in neutral barrels with a few new, ÜBER mostly new
+    /// French oak.
+    public var barrels: VesselSplit {
+        switch id {
+        case .sybarite: VesselSplit(stainless: 0.85, neutralOak: 0.15)
+        case .rose: .only(.stainless)
+        case .m5: VesselSplit(neutralOak: 0.8, newOak: 0.2)
+        case .uber: VesselSplit(neutralOak: 0.15, newOak: 0.85)
+        }
+    }
+}
+
+/// Doug's note at barrel-down for one wine a lot might go into.
+public struct BarrelNote: Equatable, Sendable, Identifiable {
+    public let wine: WineID
+    public let text: String
+    /// Where he'd aim.
+    public let target: VesselSplit
+    /// How sure he is of the main vessel's share, either way; nil while it's
+    /// only a hunch.
+    public let margin: Double?
+
+    public var id: WineID { wine }
 }

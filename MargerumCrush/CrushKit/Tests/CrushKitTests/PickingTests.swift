@@ -26,7 +26,7 @@ func play(_ round: inout PickingRound, skill: Double = 0.9, mistakes: Double = 0
             switch cluster.kind {
             case .ripe, .shot, .golden:
                 want = roll < skill
-            case .rotten, .sour, .wing:
+            case .rotten, .sour, .secondCrop:
                 want = roll < mistakes
             case .leaf, .cane:
                 want = roll < mistakes / 2
@@ -50,7 +50,7 @@ func play(_ round: inout PickingRound, skill: Double = 0.9, mistakes: Double = 0
 
 final class PickingTests: XCTestCase {
     private let usual: [PickingRound.Kind: Double] = [
-        .ripe: 0.55, .greenStem: 0.08, .shaded: 0.12, .wing: 0.03, .shot: 0.06, .raisined: 0.03,
+        .ripe: 0.55, .greenStem: 0.08, .shaded: 0.12, .secondCrop: 0.03, .shot: 0.06, .raisined: 0.03,
         .rotten: 0.02, .sour: 0.01, .golden: 0.03, .leaf: 0.05, .cane: 0.02,
     ]
 
@@ -98,15 +98,19 @@ final class PickingTests: XCTestCase {
         XCTAssertGreaterThan(PickingRound.Bin([.shot: 10]).tannin, ripe.tannin)
         XCTAssertGreaterThan(PickingRound.Bin([.shot: 10]).complexity, ripe.complexity)
         XCTAssertGreaterThan(PickingRound.Bin([.greenStem: 10]).green, ripe.green)
-        // Leaves and canes add no juice, only bitterness.
+        // Leaves and canes add no juice, only bitterness; a cane less than a leaf.
         let leafy = PickingRound.Bin([.ripe: 10, .leaf: 2])
         XCTAssertEqual(leafy.weight, ripe.weight)
         XCTAssertEqual(leafy.mog, 2)
         XCTAssertEqual(leafy.mogShare, 2.0 / 12, accuracy: 1e-9)
-        // Weighted by juice: a wing cluster is small.
-        let mixed = PickingRound.Bin([.ripe: 1, .wing: 1])
-        XCTAssertEqual(mixed.weight, 1.4, accuracy: 1e-9)
-        XCTAssertEqual(mixed.brix, (0.4 - 0.4 * 4.5) / 1.4, accuracy: 1e-9)
+        XCTAssertEqual(PickingRound.Bin([.ripe: 10, .cane: 2]).mogShare, 1.4 / 12, accuracy: 1e-9)
+        // Weighted by juice: a second-crop bunch is small.
+        let mixed = PickingRound.Bin([.ripe: 1, .secondCrop: 1])
+        XCTAssertEqual(mixed.weight, 1.35, accuracy: 1e-9)
+        XCTAssertEqual(mixed.brix, (0.4 - 0.35 * 6) / 1.35, accuracy: 1e-9)
+        // Green stems, by weight, for whole clusters.
+        XCTAssertEqual(PickingRound.Bin([.ripe: 9, .greenStem: 1]).greenStems, 0.1, accuracy: 1e-9)
+        XCTAssertEqual(ripe.greenStems, 0)
     }
 
     func testPickingEverythingMatchesTheBlock() {
@@ -151,7 +155,7 @@ final class PickingTests: XCTestCase {
         let heat = PickingRound.odds(block: block, style: .red, weather: .heatWave)
         block.set(rot: 0.15)
         let wet = PickingRound.odds(block: block, style: .red, weather: .rain)
-        XCTAssertGreaterThan(early[.wing] ?? 0, late[.wing] ?? 0)
+        XCTAssertGreaterThan(early[.secondCrop] ?? 0, late[.secondCrop] ?? 0)
         XCTAssertGreaterThan(early[.greenStem] ?? 0, late[.greenStem] ?? 0)
         XCTAssertGreaterThan(late[.raisined] ?? 0, early[.raisined] ?? 0)
         XCTAssertGreaterThan(heat[.raisined] ?? 0, late[.raisined] ?? 0)

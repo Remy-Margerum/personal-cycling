@@ -348,6 +348,6 @@ struct Joystick: View {
                 }
         )
         .accessibilityLabel("Walk")
-        .accessibilityHint("Drag to walk Doug around the winery, or tap a machine to send him there.")
+        .accessibilityHint("Drag to walk Doug around the winery, or tap a machine to send him to work it.")
     }
 }

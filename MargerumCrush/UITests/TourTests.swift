@@ -2,8 +2,8 @@ import XCTest
 
 /// Plays a short first vintage in the simulator, screenshotting each screen
 /// on the way: wait for the Sauvignon Blanc to ripen, pick it and let Doug
-/// make it (he plays himself with -autopick), pick Grenache for rosé and let
-/// the crew make it, end the harvest, walk Doug to the lab bench, bottle
+/// make it (he plays himself with -autopick), let the crew pick Grenache for
+/// rosé and make it, end the harvest, walk Doug to the lab bench, bottle
 /// Sybarite and the rosé, and release them.
 /// .github/workflows/screenshots-crush.yml runs it and uploads the
 /// screenshots.
@@ -48,12 +48,10 @@ final class TourTests: XCTestCase {
         snap("10 Crush results")
         tap(app.buttons["Back to the vineyard"])
 
-        // The crew makes a rosé.
+        // The crew picks Grenache for rosé, and makes it.
         tap(button(startingWith: "Wait until"))
-        tap(app.buttons["Pick for rosé"].firstMatch)
-        tap(app.buttons["Start picking"])
-        play(screenshot: nil)
-        tap(app.buttons["To the crush pad"])
+        tap(app.buttons["Let the crew pick it"].firstMatch)
+        tap(app.buttons["For rosé"])
         tap(app.buttons["Leave it to the cellar crew"])
         snap("11 The cellar crew")
         tap(app.buttons["The crew makes it"])

@@ -29,7 +29,7 @@ grape color matters.
 | `ClusterRed.png`, `ClusterWhite.png` | Ripe, sunny bunch on a brown, woody stem |
 | `ClusterRedGreenStem.png`, `ClusterWhiteGreenStem.png` | Colored berries on a bright green stem: not really ripe |
 | `ClusterRedShaded.png`, `ClusterWhiteShaded.png` | From inside the canopy: paler, greener berries |
-| `ClusterWing.png` | A small, hard second-crop wing cluster |
+| `ClusterSecondCrop.png` | A small, hard second-crop bunch from a side shoot |
 | `ClusterRedShot.png`, `ClusterWhiteShot.png` | "Hens and chicks": big and tiny berries mixed |
 | `ClusterRedRaisin.png`, `ClusterWhiteRaisin.png` | Sunburned and shriveled |
 | `ClusterRotten.png` | Gray, fuzzy mold (botrytis) |
