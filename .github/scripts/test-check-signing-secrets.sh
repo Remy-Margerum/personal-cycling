@@ -92,6 +92,17 @@ expect fail "p8 without BEGIN/END lines" "including the -----BEGIN PRIVATE KEY--
 good_env; ASC_KEY_P8="$(head -2 AuthKey.p8; echo '-----END PRIVATE KEY-----')"
 expect fail "cut-off p8" "isn't a readable private key"
 
+# Margerum Crush's workflow names its own profile secret.
+good_env; export PROFILE_SECRET=CRUSH_PROVISIONING_PROFILE_BASE64
+export CRUSH_PROVISIONING_PROFILE_BASE64="$(b64 profile.mobileprovision)"
+PROVISIONING_PROFILE_BASE64="not used"
+expect pass "profile from the secret PROFILE_SECRET names" "CRUSH_PROVISIONING_PROFILE_BASE64: OK"
+cmp -s out/profile.mobileprovision profile.mobileprovision && echo "ok: named profile decoded byte for byte" \
+  || { echo "FAIL: named profile differs"; failures=$((failures + 1)); }
+CRUSH_PROVISIONING_PROFILE_BASE64=""
+expect fail "empty named profile" "CRUSH_PROVISIONING_PROFILE_BASE64 is empty"
+unset PROFILE_SECRET CRUSH_PROVISIONING_PROFILE_BASE64
+
 if [ "$failures" -gt 0 ]; then
   echo "$failures check(s) failed"
   exit 1

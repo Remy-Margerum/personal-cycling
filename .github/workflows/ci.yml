@@ -24,6 +24,55 @@ jobs:
         working-directory: RideKit
         run: swift test
 
+  crushkit:
+    name: CrushKit tests (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    steps:
+      - uses: actions/checkout@v5
+      - name: swift test
+        working-directory: MargerumCrush/CrushKit
+        run: swift test
+
+  crush-ios:
+    name: Margerum Crush iOS build (unsigned)
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: MargerumCrush
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tools
+        run: |
+          brew install xcodegen xcbeautify
+          xcodebuild -version
+      - name: Generate project
+        run: xcodegen
+      - name: Archive
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project MargerumCrush.xcodeproj \
+            -scheme MargerumCrush \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/MargerumCrush.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+      # Things App Store Connect rejects an upload for.
+      - name: Check Info.plist and icon
+        run: |
+          app="$RUNNER_TEMP/MargerumCrush.xcarchive/Products/Applications/MargerumCrush.app"
+          plist="$app/Info.plist"
+          get() { /usr/libexec/PlistBuddy -c "Print :$1" "$plist"; }
+          test -f "$app/Assets.car"
+          test "$(get CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName)" = AppIcon
+          test "$(get ITSAppUsesNonExemptEncryption)" = false
+          test "$(get CFBundleIdentifier)" = com.remymargerum.margerumcrush
+          echo "version $(get CFBundleShortVersionString) build $(get CFBundleVersion)"
+          test "$(get CFBundleShortVersionString)" != '$(MARKETING_VERSION)'
+          test "$(get CFBundleVersion)" != '$(CURRENT_PROJECT_VERSION)'
+
   ios:
     name: iOS build (unsigned)
     runs-on: macos-26

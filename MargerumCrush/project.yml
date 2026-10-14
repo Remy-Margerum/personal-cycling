@@ -1,0 +1,65 @@
+# XcodeGen spec — run `xcodegen` in this folder to create MargerumCrush.xcodeproj
+# (plus the generated Info.plist). Don't commit the output.
+name: MargerumCrush
+options:
+  bundleIdPrefix: com.remymargerum
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+packages:
+  CrushKit:
+    path: CrushKit
+targets:
+  MargerumCrush:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+        excludes:
+          - "**/*.md"
+    dependencies:
+      - package: CrushKit
+    scheme:      # shared scheme, so `xcodebuild -scheme MargerumCrush` works in CI
+      testTargets:
+        - MargerumCrushUITests
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.remymargerum.margerumcrush
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "0.1"
+        # The TestFlight workflow overrides this with its run number.
+        CURRENT_PROJECT_VERSION: "1"
+        # Signing lives in Config/Signing.xcconfig; see the note in the
+        # repo's top-level project.yml.
+        CODE_SIGN_IDENTITY: $(CRUSH_CODE_SIGN_IDENTITY)
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Margerum
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+  # Plays a short vintage in the simulator and screenshots every screen
+  # (.github/workflows/screenshots-crush.yml). Not part of the archive.
+  MargerumCrushUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: MargerumCrush
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.remymargerum.margerumcrush.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
