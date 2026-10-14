@@ -1,8 +1,10 @@
 import Foundation
 
-/// The wines you can make.
+/// The wines you can make: the four Margerum blends, and a single varietal
+/// of each red grape for the wine the blends leave behind.
 public enum WineID: String, Codable, CaseIterable, Sendable, Identifiable {
     case sybarite, rose, m5, uber
+    case grenache, syrah, mourvedre, counoise, cinsault
 
     public var id: String { rawValue }
 
@@ -12,7 +14,36 @@ public enum WineID: String, Codable, CaseIterable, Sendable, Identifiable {
         case .rose: .rose
         case .m5: .m5
         case .uber: .uber
+        case .grenache: .grenache
+        case .syrah: .syrah
+        case .mourvedre: .mourvedre
+        case .counoise: .counoise
+        case .cinsault: .cinsault
         }
+    }
+
+    /// Sybarite, the rosé, M5 and ÜBER.
+    public static let blends: [WineID] = [.sybarite, .rose, .m5, .uber]
+    /// One wine per red grape.
+    public static let singles: [WineID] = [.grenache, .syrah, .mourvedre, .counoise, .cinsault]
+
+    /// The grape a single varietal is made of; nil for the blends.
+    public var grape: Varietal? {
+        switch self {
+        case .sybarite, .rose, .m5, .uber: nil
+        case .grenache: .grenache
+        case .syrah: .syrah
+        case .mourvedre: .mourvedre
+        case .counoise: .counoise
+        case .cinsault: .cinsault
+        }
+    }
+
+    public var isSingle: Bool { grape != nil }
+
+    /// The single varietal of a red grape.
+    public static func single(_ grape: Varietal) -> WineID? {
+        singles.first { $0.grape == grape }
     }
 }
 
@@ -23,6 +54,9 @@ public struct WineSpec: Sendable {
         /// At least this share of one grape (75% is the legal minimum for
         /// putting a grape's name on the label).
         case varietal(Varietal, Double)
+        /// A single varietal: at least 75% of the grape, and the purer it is
+        /// the more it shows (`purityBonus`).
+        case single(Varietal)
         /// At least 5% of each of the five reds.
         case allFive
         /// Any grapes, as long as the style is right.
@@ -70,10 +104,51 @@ public struct WineSpec: Sendable {
                  .body: 8.2...9.5, .spice: 5.0...7.5, .oak: 4.0...6.0],
         rule: .varietal(.syrah, 0.75))
 
+    /// Points a single varietal of one grape alone earns for showing that
+    /// grape and its vineyard plainly: a pure Grenache scores with the M5
+    /// its grapes would have gone into. Nothing at 75%, all of it at 100%.
+    public static let purityBonus = 3.0
+
+    public static let grenache = WineSpec(
+        id: .grenache, name: "Grenache", kind: "Single varietal", style: .red, price: 45,
+        blurb: "Bright, red-fruited Grenache from neutral barrels. At least 75% Grenache, and the purer the better.",
+        target: [.fruit: 7.8...9.4, .acidity: 3.0...4.6, .tannin: 4.2...5.8,
+                 .body: 7.0...8.6, .spice: 3.6...5.2, .oak: 0.8...2.4],
+        rule: .single(.grenache))
+
+    public static let syrah = WineSpec(
+        id: .syrah, name: "Syrah", kind: "Single varietal", style: .red, price: 50,
+        blurb: "Estate Syrah: dark fruit and pepper, mostly neutral barrels. At least 75% Syrah, and the purer the better.",
+        target: [.fruit: 7.2...8.8, .acidity: 3.0...4.8, .tannin: 6.8...8.4,
+                 .body: 7.8...9.4, .spice: 5.6...7.4, .oak: 1.2...3.6],
+        rule: .single(.syrah))
+
+    public static let mourvedre = WineSpec(
+        id: .mourvedre, name: "Mourvèdre", kind: "Single varietal", style: .red, price: 45,
+        blurb: "Savory, structured Mourvèdre. At least 75% Mourvèdre, and the purer the better.",
+        target: [.fruit: 5.2...7.0, .acidity: 3.4...5.0, .tannin: 7.2...8.8,
+                 .body: 7.0...8.6, .spice: 6.6...8.2, .oak: 1.0...2.8],
+        rule: .single(.mourvedre))
+
+    public static let counoise = WineSpec(
+        id: .counoise, name: "Counoise", kind: "Single varietal", style: .red, price: 40,
+        blurb: "Light, spicy, peppery Counoise. At least 75% Counoise, and the purer the better.",
+        target: [.fruit: 6.8...8.4, .acidity: 4.6...6.2, .tannin: 2.8...4.4,
+                 .body: 4.8...6.4, .spice: 6.2...7.8, .oak: 0.8...2.4],
+        rule: .single(.counoise))
+
+    public static let cinsault = WineSpec(
+        id: .cinsault, name: "Cinsault", kind: "Single varietal", style: .red, price: 40,
+        blurb: "Silky, perfumed Cinsault, partly in steel to keep it fresh. At least 75% Cinsault, and the purer the better.",
+        target: [.fruit: 7.8...9.4, .acidity: 4.2...5.8, .tannin: 1.8...3.2,
+                 .body: 4.5...6.1, .spice: 2.6...4.0, .oak: 0.6...2.2],
+        rule: .single(.cinsault))
+
     /// The grapes the rule asks for, for showing what's missing.
     public var requiredVarietals: [Varietal] {
         switch rule {
         case .varietal(let grape, _): [grape]
+        case .single(let grape): [grape]
         case .allFive: Varietal.allCases.filter(\.isRed)
         case .any: []
         }
@@ -111,12 +186,19 @@ public struct WineSpec: Sendable {
             problems.append("A vintage on the label needs 85% from one harvest. Now \(percent(Double(main.value) / total)) "
                             + "from \(main.key).")
         }
+        var purity = 0.0
         switch rule {
         case .varietal(let grape, let minimum):
             let share = shares[grape] ?? 0
             if cases > 0 && share < minimum {
                 problems.append("Needs at least \(percent(minimum)) \(grape.name). Now \(percent(share)).")
             }
+        case .single(let grape):
+            let share = shares[grape] ?? 0
+            if cases > 0 && share < 0.75 {
+                problems.append("Needs at least 75% \(grape.name). Now \(percent(share)).")
+            }
+            purity = Self.purityBonus * min(1, max(0, (share - 0.75) / 0.25))
         case .allFive:
             let missing = requiredVarietals.filter { (shares[$0] ?? 0) < 0.05 }
             if cases > 0 && !missing.isEmpty {
@@ -141,7 +223,7 @@ public struct WineSpec: Sendable {
         let hot = 2 * max(0, alcohol - 15.5)
         // Bottled before it settled, or before the reds came together.
         let young = used.reduce(0) { $0 + Aging.youth($1.lot.style, months: $1.lot.months) * Double($1.cases) } / total
-        let raw = 61 + 0.35 * quality + complexity - stylePenalty - hot - young
+        let raw = 61 + 0.35 * quality + complexity + purity - stylePenalty - hot - young
         let score = cases > 0 ? Int(min(100, max(70, raw)).rounded()) : 0
 
         return BlendAnalysis(cases: cases, profile: profile, quality: quality, alcohol: alcohol, color: color,
@@ -321,13 +403,19 @@ extension WineSpec {
     /// How Doug barrels down the wine for it, from the Margerum tech sheets
     /// (nudged to fit the game's oak): Sybarite mostly steel with a little
     /// neutral oak, M5 in neutral barrels with a few new, ÜBER mostly new
-    /// French oak.
+    /// French oak; the single varietals mostly neutral barrels, Cinsault
+    /// partly in steel and the Syrah with a quarter new.
     public var barrels: VesselSplit {
         switch id {
         case .sybarite: VesselSplit(stainless: 0.85, neutralOak: 0.15)
         case .rose: .only(.stainless)
         case .m5: VesselSplit(neutralOak: 0.8, newOak: 0.2)
         case .uber: VesselSplit(neutralOak: 0.15, newOak: 0.85)
+        case .grenache: VesselSplit(stainless: 0.1, neutralOak: 0.9)
+        case .syrah: VesselSplit(neutralOak: 0.75, newOak: 0.25)
+        case .mourvedre: VesselSplit(neutralOak: 0.9, newOak: 0.1)
+        case .counoise: .only(.neutralOak)
+        case .cinsault: VesselSplit(stainless: 0.3, neutralOak: 0.7)
         }
     }
 }

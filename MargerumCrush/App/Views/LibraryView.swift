@@ -111,11 +111,15 @@ struct HowToPlayView: View {
          "Each wine has Doug's range, the gold bands on the taste chart: get the dots inside them. Blends of "
             + "several grapes score a little higher. Any lot in the cellar can go in, as long as the label holds: 85% "
             + "the wine's color and 85% from one vintage, the year on the label. M5 needs all five: Syrah, Grenache, "
-            + "Mourvèdre, Counoise and Cinsault. Sybarite and ÜBER Syrah need at least 75% of their grape."),
+            + "Mourvèdre, Counoise and Cinsault. Sybarite and ÜBER Syrah need at least 75% of their grape. What the "
+            + "blends leave makes single varietals: a Grenache, Syrah, Mourvèdre, Counoise or Cinsault of at least 75% "
+            + "of its grape, each with Doug's range for that grape. The purer it is, the better it scores: a pure one "
+            + "rates with the M5."),
         Topic("The critic and the money", "star.fill",
          "The critic scores each wine and writes a note. Scores and reputation set the price. Wine you don't bottle "
-            + "stays in barrel for another year ($6 a case): reds soften, whites and rosé fade. Sell a lot off in bulk "
-            + "whenever you like; wine that's had its extra year goes for bulk at the next release. Costs are paid "
+            + "stays in barrel for another year ($6 a case): reds soften, whites and rosé fade. Nothing goes for bulk: "
+            + "what's still in barrel after its extra year, the crew bottles at the next release as single varietals "
+            + "(each red grape its own wine, the white as Sybarite, the rosé as rosé). Costs are paid "
             + "when the vintage is released."),
         Topic("Between vintages", "leaf.fill",
          "Spend the profits on new vineyard blocks (you'll need three more for M5), more picking crews, a sorting "

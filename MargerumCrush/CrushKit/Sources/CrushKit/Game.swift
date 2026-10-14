@@ -95,16 +95,13 @@ public struct Bill: Codable, Equatable, Sendable {
 public struct VintageReport: Codable, Equatable, Sendable {
     public var vintage: Int
     public var wines: [BottledWine]
-    /// Unblended wine sold off in bulk.
-    public var bulkCases: Int
-    public var bulkSales: Double
     /// Fruit the rain got.
     public var lostTons: Double
     public var bill: Bill
     public var reputationBefore: Double
     public var reputationAfter: Double
 
-    public var sales: Double { wines.reduce(0) { $0 + ($1.revenue ?? 0) } + bulkSales }
+    public var sales: Double { wines.reduce(0) { $0 + ($1.revenue ?? 0) } }
     public var profit: Double { sales - bill.total }
 }
 
@@ -138,7 +135,6 @@ public struct Game: Codable, Equatable, Sendable {
     public static let casesPerTon = 60.0
     public static let pickingCost = 1_200.0
     public static let bottlingCostPerCase = 45.0
-    public static let bulkPricePerCase = 30.0
     /// A year in barrel for wine kept past the release.
     public static let cellarCostPerCase = 6.0
     /// The share of the shelf price the winery keeps after distributors and shops.
@@ -170,8 +166,6 @@ public struct Game: Codable, Equatable, Sendable {
     public private(set) var report: VintageReport?
     /// The cellar's month after the harvest, 0 (November) to `Aging.last` (July).
     public private(set) var cellarMonth = 0
-    /// Cases sold off in bulk this vintage, so far.
-    public private(set) var soldInBulk = 0
     private var rng: SeededGenerator
 
     public init(vintage: Int, seed: UInt64, money: Double = 25_000) {
@@ -494,14 +488,44 @@ public struct Game: Codable, Equatable, Sendable {
         return wine
     }
 
-    /// Sells a lot off as bulk wine, paid at the release.
+    /// Nothing goes for bulk: the crew bottles what the blends left as wines
+    /// of their own. Each red grape becomes its single varietal, white wine
+    /// Sybarite and rosé the rosé, one bottling per grape and harvest. `ids`
+    /// picks the lots; nil means everything still in the cellar.
     @discardableResult
-    public mutating func sellInBulk(_ lotID: UUID) -> Int {
-        guard phase == .cellar, let i = lots.firstIndex(where: { $0.id == lotID }) else { return 0 }
-        let cases = lots[i].cases
-        soldInBulk += cases
-        lots.remove(at: i)
-        return cases
+    public mutating func bottleLeftovers(_ ids: Set<UUID>? = nil) -> [BottledWine] {
+        guard phase == .cellar else { return [] }
+        struct Key: Hashable { var vintage: Int; var style: WineStyle; var grape: Varietal? }
+        var groups: [Key: [UUID: Int]] = [:]
+        for lot in lots where lot.cases > 0 && (ids?.contains(lot.id) ?? true) {
+            let key = Key(vintage: lot.vintage, style: lot.style, grape: lot.style == .red ? lot.varietal : nil)
+            groups[key, default: [:]][lot.id] = lot.cases
+        }
+        let styleOrder: [WineStyle] = [.white, .rose, .red]
+        let keys = groups.keys.sorted {
+            ($0.vintage, styleOrder.firstIndex(of: $0.style) ?? 0, $0.grape?.rawValue ?? "")
+                < ($1.vintage, styleOrder.firstIndex(of: $1.style) ?? 0, $1.grape?.rawValue ?? "")
+        }
+        var made: [BottledWine] = []
+        for key in keys {
+            let wine: WineID? = switch key.style {
+            case .white: .sybarite
+            case .rose: .rose
+            case .red: key.grape.flatMap { WineID.single($0) }
+            }
+            guard let wine, let cases = groups[key], let one = bottle(Blend(wine: wine, cases: cases)) else { continue }
+            made.append(one)
+        }
+        return made
+    }
+
+    /// The wines worth a row at the lab bench: the four blends always, and a
+    /// single varietal when its grape is in the cellar or it was bottled this
+    /// year.
+    public var winesToShow: [WineID] {
+        WineID.blends + WineID.singles.filter { wine in
+            blocker(for: wine) == nil || bottled.contains { $0.wine == wine }
+        }
     }
 
     /// Doug's notes at barrel-down: how to share a grape out between steel,
@@ -517,8 +541,11 @@ public struct Game: Codable, Equatable, Sendable {
         let wines: [WineID]
         switch varietal {
         case .sauvignonBlanc: wines = [.sybarite]
-        case .syrah: wines = [.uber, .m5]
-        case .grenache, .mourvedre, .counoise, .cinsault: wines = [.m5]
+        case .syrah: wines = [.uber, .m5, .syrah]
+        case .grenache: wines = [.m5, .grenache]
+        case .mourvedre: wines = [.m5, .mourvedre]
+        case .counoise: wines = [.m5, .counoise]
+        case .cinsault: wines = [.m5, .cinsault]
         }
         return wines.map { wine in
             let made = history.filter { $0.wine == wine }
@@ -567,29 +594,32 @@ public struct Game: Codable, Equatable, Sendable {
         return (wine.spec.price * scoreFactor * fame * tastingRoom).rounded()
     }
 
-    /// Sells the vintage: bottled wine at its price, and as bulk wine what
-    /// was sold off and anything left from last year. This year's leftovers
-    /// stay in barrel. Pays the bill, and the offseason begins.
+    /// Sells the vintage's bottled wine at its price. Last year's wine, kept a
+    /// year already, is bottled by the crew first (`bottleLeftovers`), and
+    /// this year's leftovers stay in barrel. Pays the bill, and the offseason
+    /// begins.
     @discardableResult
     public mutating func release() -> VintageReport? {
         guard phase == .cellar else { return nil }
+        let old = Set(lots.filter { $0.vintage < vintage && $0.cases > 0 }.map(\.id))
+        if !old.isEmpty {
+            let crew = bottleLeftovers(old)
+            if !crew.isEmpty {
+                note("The crew bottled last year's leftover wine: "
+                     + list(crew.map { "\($0.cases) cases of \($0.vintage) \($0.spec.name)" }) + ".")
+            }
+        }
         let sold = bottled.map { wine -> BottledWine in
             var wine = wine
             wine.revenue = Double(wine.cases * 12) * price(of: wine.wine, score: wine.score) * Self.wineryShare
             return wine
         }
-        // This year's unbottled wine stays in barrel for another year; last
-        // year's, kept a year already, goes for bulk.
+        // This year's unbottled wine stays in barrel for another year.
         lots.removeAll { $0.cases <= 0 }
-        let tooOld = lots.filter { $0.vintage < vintage }.reduce(0) { $0 + $1.cases }
-        lots.removeAll { $0.vintage < vintage }
-        if tooOld > 0 { note("\(tooOld) cases of last year's wine went for bulk.") }
-        let kept = lots.reduce(0) { $0 + $1.cases }
+        let kept = lots.filter { $0.vintage >= vintage }.reduce(0) { $0 + $1.cases }
         if kept > 0 { note("\(kept) cases stay in barrel for another year.") }
-        let bulkCases = soldInBulk + tooOld
-        var report = VintageReport(vintage: vintage, wines: sold, bulkCases: bulkCases,
-                                   bulkSales: Double(bulkCases) * Self.bulkPricePerCase, lostTons: lostTons,
-                                   bill: bill, reputationBefore: reputation, reputationAfter: reputation)
+        var report = VintageReport(vintage: vintage, wines: sold, lostTons: lostTons, bill: bill,
+                                   reputationBefore: reputation, reputationAfter: reputation)
         // Reputation follows the scores, weighted by how much of each wine people drank.
         let cases = sold.reduce(0) { $0 + $1.cases }
         if cases > 0 {
@@ -639,7 +669,6 @@ public struct Game: Codable, Equatable, Sendable {
         bottled = []
         bill = Bill()
         bill.cellar = Double(lots.reduce(0) { $0 + $1.cases }) * Self.cellarCostPerCase
-        soldInBulk = 0
         lostTons = 0
         diary = []
         for i in blocks.indices { blocks[i].startVintage(using: &rng) }

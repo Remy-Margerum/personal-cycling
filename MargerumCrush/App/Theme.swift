@@ -191,6 +191,7 @@ enum Art {
         case .rose: labelRose
         case .m5: labelM5
         case .uber: labelUber
+        case .grenache, .syrah, .mourvedre, .counoise, .cinsault: nil
         }
     }
 
