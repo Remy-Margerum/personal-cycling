@@ -415,7 +415,12 @@ final class GameTests: XCTestCase {
         XCTAssertEqual(game.block(syrah)?.picked, true)
         XCTAssertEqual(game.crushPad, fruit)
         XCTAssertNil(game.crewPick(sb, for: .white), "one crew, one block a week")
-        XCTAssertEqual(twin.crewPick(syrah, for: .rose), fruit, "same seed, same pick")
+        // Same seed, same pick (sums over the bunch kinds can differ in the
+        // last bit: dictionaries don't promise an order).
+        let again = try XCTUnwrap(twin.crewPick(syrah, for: .rose))
+        XCTAssertEqual(again.picking, fruit.picking)
+        XCTAssertEqual(again.tons, fruit.tons)
+        XCTAssertEqual(again.acid, fruit.acid, accuracy: 1e-9)
     }
 
     func testSavesAndLoads() throws {
