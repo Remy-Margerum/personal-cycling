@@ -70,7 +70,8 @@ struct GrapeCluster: View {
     }
 }
 
-/// A cluster in the picking game: the artwork if there is some, else drawn.
+/// A bunch (or a leaf, or a cane) in the picking game: the artwork if there
+/// is some, else drawn.
 struct ClusterSprite: View {
     let kind: PickingRound.Kind
     let varietal: Varietal
@@ -78,8 +79,15 @@ struct ClusterSprite: View {
     var body: some View {
         if let image = Art.cluster(kind, red: varietal.isRed) {
             Image(uiImage: image).resizable().scaledToFit()
+        } else if kind == .leaf || kind == .cane {
+            Image(systemName: kind == .leaf ? "leaf.fill" : "line.diagonal")
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(kind.color(for: varietal))
+                .padding(8)
         } else {
-            GrapeCluster(color: kind.color(for: varietal), mold: kind == .rotten, sparkle: kind == .golden)
+            GrapeCluster(color: kind.color(for: varietal), mold: kind == .rotten || kind == .sour, sparkle: kind == .golden)
+                .scaleEffect(kind == .wing ? 0.7 : 1, anchor: .top)
         }
     }
 }
@@ -362,7 +370,20 @@ struct WineLabel: View {
 
     var body: some View {
         if let image = Art.label(wine) {
+            // The real label, with the vintage spelled out across the top.
             Image(uiImage: image).resizable().scaledToFill()
+                .overlay {
+                    GeometryReader { geo in
+                        Text(Format.vintageWords(vintage))
+                            .font(.system(size: max(1, geo.size.height * 0.026), weight: .medium, design: .serif))
+                            .tracking(geo.size.height * 0.006)
+                            .foregroundStyle(Color(white: 0.18))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.3)
+                            .frame(width: geo.size.width * 0.82)
+                            .position(x: geo.size.width / 2, y: geo.size.height * 0.14)
+                    }
+                }
         } else {
             VStack(spacing: 2 * scale) {
                 Text("MARGERUM")

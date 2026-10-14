@@ -1,9 +1,11 @@
 import XCTest
 
 /// Plays a short first vintage in the simulator, screenshotting each screen
-/// on the way: wait for the Sauvignon Blanc to ripen, pick it, pick Grenache
-/// for rosé, end the harvest, bottle Sybarite and the rosé, and release
-/// them. .github/workflows/screenshots-crush.yml runs it and uploads the
+/// on the way: wait for the Sauvignon Blanc to ripen, pick it and let Doug
+/// make it (he plays himself with -autopick), pick Grenache for rosé and let
+/// the crew make it, end the harvest, walk Doug to the lab bench, bottle
+/// Sybarite and the rosé, and release them.
+/// .github/workflows/screenshots-crush.yml runs it and uploads the
 /// screenshots.
 final class TourTests: XCTestCase {
     private var app: XCUIApplication!
@@ -34,42 +36,66 @@ final class TourTests: XCTestCase {
         play(screenshot: "05 Picking")
         snap("06 Results")
         tap(app.buttons["To the crush pad"])
-        snap("07 Crush pad")
-        tap(app.buttons["Into the cellar"])
+        snap("07 Crush briefing")
 
+        // Doug makes the Sybarite (he plays himself with -autopick).
+        tap(app.buttons["Make it with Doug"])
+        sleep(7)
+        snap("08 Doug at the press")
+        sleep(12)
+        snap("09 Doug in the cellar")
+        XCTAssertTrue(app.buttons["Back to the vineyard"].waitForExistence(timeout: 180), "the crush never finished")
+        snap("10 Crush results")
+        tap(app.buttons["Back to the vineyard"])
+
+        // The crew makes a rosé.
         tap(button(startingWith: "Wait until"))
         tap(app.buttons["Pick for rosé"].firstMatch)
         tap(app.buttons["Start picking"])
         play(screenshot: nil)
         tap(app.buttons["To the crush pad"])
-        tap(app.buttons["Into the cellar"])
+        tap(app.buttons["Leave it to the cellar crew"])
+        snap("11 The cellar crew")
+        tap(app.buttons["The crew makes it"])
 
         tap(app.buttons["End the harvest now"])
         tap(app.buttons["Leave it for the rain"])
         scrollToTop()
-        snap("08 Cellar")
+        snap("12 Cellar")
+
+        // Doug walks to the lab bench on his own (-autopick) to blend.
+        tap(app.buttons["Into the cellar with Doug"])
+        let blend = app.buttons["Blend and bottle"]
+        XCTAssertTrue(blend.waitForExistence(timeout: 15))
+        waitUntilEnabled(blend, timeout: 30)
+        snap("13 Barrel room")
+        blend.tap()
 
         tap(button(containing: "Sybarite"))
-        snap("09 Blending lab")
+        snap("14 Blending lab")
         tap(button(startingWith: "Bottle "))
         sleep(2) // let the score land
-        snap("10 Critic")
+        snap("15 Critic")
         tap(app.buttons["Done"])
 
         tap(button(containing: "Rosé"))
         tap(button(startingWith: "Bottle "))
         sleep(2)
-        snap("11 Critic, rosé")
+        snap("16 Critic, rosé")
         tap(app.buttons["Done"])
+        tap(app.buttons["Done"]) // the lab bench
+        tap(app.buttons["Leave the cellar"])
 
         tap(button(startingWith: "Release the"))
+        let bulk = app.buttons["Release, and sell the rest in bulk"]
+        if bulk.waitForExistence(timeout: 5) { bulk.tap() }
         scrollToTop()
-        snap("12 Winter report")
+        snap("17 The vintage report")
         app.swipeUp()
-        snap("13 Winter shop")
+        snap("18 Between vintages")
 
         tap(app.buttons["Wine library"])
-        snap("14 Wine library")
+        snap("19 Wine library")
     }
 
     // MARK: Helpers
@@ -100,6 +126,12 @@ final class TourTests: XCTestCase {
             if element.frame.midY < app.frame.midY { app.swipeDown() } else { app.swipeUp() }
         }
         element.tap()
+    }
+
+    private func waitUntilEnabled(_ element: XCUIElement, timeout: TimeInterval,
+                                  file: StaticString = #filePath, line: UInt = #line) {
+        let enabled = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: element)
+        wait(for: [enabled], timeout: timeout)
     }
 
     private func scrollToTop() {

@@ -1,17 +1,18 @@
 # Margerum Crush (iOS)
 
-A harvest-and-blending game for iPhone. You run the winery for one vintage
-at a time: watch the fruit ripen through a Santa Barbara County harvest,
-send crews to pick, decide what each lot becomes on the crush pad, blend
-Sybarite, rosé, M5 and ÜBER Syrah for the critic, and spend the profits on
-more vineyard blocks and better gear. The goal is five stars and a
+A harvest-and-blending game for iPhone. You run the winery one vintage
+at a time, starting with Margerum's first, 2001: watch the fruit ripen
+through a Santa Barbara County harvest, pick it bunch by bunch, make the
+wine as Doug on the winery floor, age it through the winter, blend
+Sybarite, rosé, M5 and ÜBER Syrah to Doug's range, and spend the profits
+on more vineyard blocks and better gear. The goal is five stars and a
 100-point M5.
 
 It lives in this repo next to Raggio but is a separate app (bundle ID
 `com.remymargerum.margerumcrush`, home-screen name **Margerum**) with its
 own Xcode project spec, package, CI jobs and TestFlight workflow. The wine
-names are real; the prices, scores and vineyard numbers are made up for
-the game.
+names and labels are real; the prices, scores and vineyard numbers are
+made up for the game.
 
 ## How a vintage plays
 
@@ -21,25 +22,54 @@ the game.
    and burn acid, fog slows things down, rain dilutes and spreads mold, and
    October gets wetter. The forecast is right about 3 times in 4. One crew
    picks one block a week; whatever is still hanging after Oct 19 is lost.
-2. **Picking.** A 30-second tapping game on the trellis. Tap ripe bunches,
-   leave green and moldy ones (they end up in the wine), grab the rare gold
-   ones, and don't swat the wasps (−3 s). Picking about three bunches in
-   four brings in the whole crop. Early picks have more green bunches; rain
-   brings more mold.
-3. **Crush pad.** Stainless steel, neutral oak or (once bought) new French
-   oak. Red grapes can go all red or *saignée*, which bleeds 20% off as rosé
-   and concentrates the red. Grapes picked for rosé go straight to steel.
-4. **Blending lab.** Sliders for each lot, a live taste chart against the
-   critic's style (gold bands), the blend's color, alcohol and an estimated
-   score. Rules follow the labels: Sybarite and ÜBER need 75% of their
-   grape, M5 needs all five (Syrah, Grenache, Mourvèdre, Counoise,
-   Cinsault), and more grapes in a blend score a little higher.
-5. **Release.** The critic scores each wine (±1 for mood) with a tasting
-   note. Scores and reputation set prices; unbottled wine sells in bulk;
-   the season's costs are paid.
-6. **Winter.** Lease the Cinsault, Counoise and Mourvèdre blocks (needed for
-   M5) and a cool-climate Syrah block; hire more crews; buy a sorting table,
-   a weather station, new French oak and a tasting room.
+2. **Picking.** A 30-second tapping game on the trellis, and every bunch
+   changes the wine. Sunny bunches on brown stems bring sugar, color and
+   ripe tannin; green-stemmed and shaded ones bring acid and green
+   character (a little suits Sybarite); small wing clusters are sour and
+   green; hens and chicks add tannin and complexity; raisined bunches push
+   the sugar up and the acid down; gray mold and sour rot are faults; and
+   Doug's perfect bunch is pure complexity. Leaves and canes get grabbed
+   too, and make the wine bitter and stemmy. Meters show the bins' sugar
+   and acid against what the wine needs, with tannin, green, complexity and
+   leaves alongside. Early blocks have more green and wing bunches, late
+   ones more raisins, and rain brings rot, so sorting is how you rescue a
+   pick that's early or late. Picking about seven bunches in ten brings in
+   the whole crop; skipping makes less wine, but better. Don't swat the
+   wasps (−3 s).
+3. **Doug's crush.** A briefing says what this fruit needs and when, then
+   you either **make it with Doug** or leave it to the cellar crew (decent,
+   never inspired). With Doug, you walk him around the winery floor (thumb
+   stick, or tap a machine) and do each job at its moment, against a clock
+   that runs slow at the press and fast through the fermentation:
+   - white: whole clusters into the press, and stop it before the bitter
+     press juice; settle the juice cold, add the yeast, keep it cool;
+   - rosé: crush into the press and press at pale salmon, a few hours
+     later (sooner for dark, ripe or warm grapes);
+   - red: destem, cold soak, bleed off pink juice for saignée if you like,
+     add the yeast, punch down the cap before it dries out (vinegar), run
+     the chiller to stay under 32 °C, leave it on the skins after it's dry
+     (riper fruit wants longer), press, and barrel down into steel,
+     neutral or new oak.
+
+   Every window moves with how ripe and how warm the fruit came in. The
+   results screen lists what went right and wrong.
+4. **The cellar** (November to July). Doug walks the barrel room month by
+   month: top up the barrels every couple of months or they oxidize, and
+   bottle each wine when it tastes best. Whites and rosé are best young;
+   reds soften and new oak builds. The lab bench shows the blend now and a
+   month from now.
+5. **Blending.** Sliders for each lot, a live taste chart against Doug's
+   range (gold bands), the blend's color, alcohol and an estimated score.
+   Rules follow the labels: Sybarite and ÜBER need 75% of their grape, M5
+   needs all five (Syrah, Grenache, Mourvèdre, Counoise, Cinsault), and more
+   grapes in a blend score a little higher.
+6. **Release** in August. The critic scores each wine (±1 for mood) with a
+   tasting note. Scores and reputation set prices; unbottled wine sells in
+   bulk; the season's costs are paid.
+7. **Winter.** Lease the Cinsault, Counoise and Mourvèdre blocks (needed for
+   M5) and a cool-climate Syrah block; hire more crews; buy a sorting table
+   (pulls out rot, leaves and canes), a weather station, new French oak and
+   a tasting room.
 
 ## Layout
 
@@ -51,15 +81,20 @@ the game.
       Basics                   seeded random numbers, colors, taste profiles
       Varietal                 the six grapes: windows, ripening, flavor
       Vineyard                 calendar, weather, vineyard blocks
-      Picking                  the picking game (clock, spawns, taps, scoring)
+      Picking                  the picking game: bunch kinds, the bins, taps
       Cellar                   fruit quality, vessels, saignée, lots
-      Wines                    the four wines, blend analysis, tasting notes
+      Floor                    the winery floor, Doug walking it, paths
+      Winemaking               Doug's crush in real time, and its results
+      CrushPlan                when to do what: the crew and the autopilot
+      Aging                    the cellar months: oak, tannin, fruit
+      Wines                    the four wines, Doug's range, tasting notes
       Game                     the whole game state, upgrades, the money
     App/                       the iOS app (SwiftUI)
       GameStore                holds the game and saves it after every move
-      Views/                   title, harvest, picking, crush pad, cellar,
-                               blending lab, review, winter, library, drawings
-      Art/                     optional artwork (see Art/README.md)
+      Views/                   title, harvest, picking, Doug's crush (floor,
+                               briefing, results), barrel room, crush pad,
+                               cellar, blending lab, review, winter, library
+      Art/                     the artwork (see Art/README.md)
     UITests/TourTests          the screenshot tour (below)
 ```
 
@@ -69,29 +104,36 @@ All the rules are in CrushKit, so they're tested without a phone:
 cd MargerumCrush/CrushKit && swift test
 ```
 
-`BalanceTests` plays five vintages with a simulated casual player and an
-expert, a dozen times each, and prints average scores and profits. Run it
-after changing any numbers: windows and ripening in `Varietal.swift`,
-quality in `Cellar.swift`, styles and scoring in `Wines.swift`, prices and
-upgrade costs in `Game.swift`.
+`BalanceTests` plays five vintages with two simulated players, a dozen
+times each, and prints average scores, bottling months and profits: a
+casual player (picks whatever's ripe, leaves the crush to the crew,
+bottles everything in February) and an expert (waits for the middle of
+the window, sorts the bunches, plays Doug's crush well, bottles each wine
+in its best month). Run it after changing any numbers: windows and
+ripening in `Varietal.swift`, bunches in `Picking.swift`, quality in
+`Cellar.swift`, the crush in `Winemaking.swift`, aging in `Aging.swift`,
+Doug's range and scoring in `Wines.swift`, prices and upgrade costs in
+`Game.swift`.
 
 ## Screenshots
 
 `.github/workflows/screenshots-crush.yml` plays a short first vintage in the
 iPhone simulator (`UITests/TourTests.swift`) on every push that touches the
-game: it picks two blocks (the app picks for itself when launched with
-`-autopick`, since UI tests can't keep up), bottles Sybarite and a rosé and
-releases them. A
-screenshot of each screen lands in the run's **screenshots** artifact
-(GitHub → Actions → the run → Artifacts). It's a quick way to see a change
-without a phone, and a check that the game still plays from start to finish.
+game: it picks two blocks (the app plays the fast parts itself when
+launched with `-autopick`, since UI tests can't keep up), lets Doug make the
+first on the winery floor and the crew the second, walks the barrel room,
+bottles Sybarite and a rosé and releases them. A screenshot of each screen
+lands in the run's **screenshots** artifact (GitHub → Actions → the run →
+Artifacts). It's a quick way to see a change without a phone, and a check
+that the game still plays from start to finish.
 
 ## Artwork
 
-Everything is drawn in code, so the game works with no image files. PNGs
-with the names listed in [App/Art/README.md](App/Art/README.md) (title
-screen, vineyard backdrop, grape bunches, wasp, bottle labels) replace the
-drawn versions with no code changes.
+The title screen, vineyard, bunches, leaves, wasp, winery floor, machines
+and Doug were made with OpenRouter (Gemini 3 Pro Image); the bottle labels
+are Margerum's real front labels, with the game spelling out the vintage.
+Every image is optional: the game draws its own version of anything
+missing. [App/Art/README.md](App/Art/README.md) lists the files and sizes.
 
 ## Getting it on the iPhone (TestFlight)
 
@@ -140,8 +182,7 @@ in `MargerumCrush/`, open `MargerumCrush.xcodeproj`, pick your team under
 ## Ideas
 
 - Sound: snips, the crusher, a cork.
-- Real label artwork and photos (see `App/Art/`).
 - More wines from the same grapes, such as a vineyard-designate Syrah.
 - Events: a September heat spike, wildfire smoke, birds, frost-shortened
   crops.
-- Game Center leaderboards for best M5 and pick points.
+- Game Center leaderboards for the best M5.

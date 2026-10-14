@@ -1,17 +1,48 @@
 import CrushKit
 import SwiftUI
 
-/// After the harvest: the lots in tank and barrel, and the wines to make.
+/// After the harvest: the cellar's months, the wines to make (Doug blends
+/// them at the lab bench) and the lots in tank and barrel.
 struct CellarSection: View {
     @Environment(GameStore.self) private var store
     let game: Game
     @State private var confirmRelease = false
+    @State private var showCellar = false
 
     var body: some View {
         VStack(spacing: 14) {
-            SectionTitle("Make the wines", detail: "One bottling of each")
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("\(Aging.name(game.cellarMonth)) in the cellar").font(.headline)
+                    Spacer()
+                    Text(game.monthsLeft == 0 ? "Release next month" : "\(game.monthsLeft) months to the release")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text("Walk Doug through the cellar: top up the barrels, taste the lots, and blend and bottle each wine "
+                     + "at the lab bench when it tastes right. Rosé and Sybarite are best young; the reds want time in barrel.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                if !game.needsTopping.isEmpty {
+                    Label("The \(game.needsTopping.map { $0.name.lowercased() }.joined(separator: " and ")) need topping up.",
+                          systemImage: "drop.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.red)
+                }
+                Button {
+                    showCellar = true
+                } label: {
+                    Label("Into the cellar with Doug", systemImage: "figure.walk")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+            .card()
+
+            SectionTitle("The wines", detail: "Blended at the lab bench")
             ForEach(WineID.allCases) { wine in
-                WineRow(game: game, wine: wine)
+                WineRow(game: game, wine: wine, link: false)
             }
 
             SectionTitle("In the cellar", detail: "\(leftover) cases")
@@ -36,6 +67,7 @@ struct CellarSection: View {
             .controlSize(.large)
             .padding(.top, 4)
         }
+        .fullScreenCover(isPresented: $showCellar) { BarrelRoomView() }
         .confirmationDialog("Release the vintage?", isPresented: $confirmRelease, titleVisibility: .visible) {
             Button("Release, and sell the rest in bulk") { store.play { $0.release() } }
         } message: {
@@ -51,6 +83,8 @@ struct CellarSection: View {
 struct WineRow: View {
     let game: Game
     let wine: WineID
+    /// Opens the blending lab. Off outside the lab bench.
+    var link = true
 
     var body: some View {
         if let bottled = game.bottled.first(where: { $0.wine == wine }) {
@@ -80,23 +114,31 @@ struct WineRow: View {
                 Image(systemName: "lock.fill").foregroundStyle(.secondary)
             }
             .card()
+        } else if link {
+            NavigationLink(value: wine) { ready(chevron: true) }
+                .buttonStyle(.plain)
         } else {
-            NavigationLink(value: wine) {
-                HStack(spacing: 14) {
-                    BottleView(wine: wine, vintage: game.vintage, color: typicalColor)
-                        .frame(height: 76)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(wine.spec.name).font(.headline).foregroundStyle(Theme.ink)
-                        Text("Ready to blend").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.wine)
-                        Text(wine.spec.kind).font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right").foregroundStyle(.secondary)
-                }
-                .card()
-            }
-            .buttonStyle(.plain)
+            ready(chevron: false)
         }
+    }
+
+    private func ready(chevron: Bool) -> some View {
+        HStack(spacing: 14) {
+            BottleView(wine: wine, vintage: game.vintage, color: typicalColor)
+                .frame(height: 76)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(wine.spec.name).font(.headline).foregroundStyle(Theme.ink)
+                Text(chevron ? "Ready to blend" : "Ready: blend it at the lab bench")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.wine)
+                Text(wine.spec.kind).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if chevron {
+                Image(systemName: "chevron.right").foregroundStyle(.secondary)
+            }
+        }
+        .card()
     }
 
     private var typicalColor: RGB {
@@ -119,7 +161,8 @@ struct LotRow: View {
                 .frame(width: 26, height: 26)
             VStack(alignment: .leading, spacing: 2) {
                 Text(lot.name).font(.subheadline.weight(.semibold))
-                Text("\(lot.vessel.name) · \(Format.one(lot.alcohol))% · quality \(Int(lot.quality.rounded()))")
+                Text("\(lot.vessel.name) · \(Format.one(lot.alcohol))% · quality \(Int(lot.quality.rounded()))"
+                     + (lot.needsTopping ? " · needs topping" : ""))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

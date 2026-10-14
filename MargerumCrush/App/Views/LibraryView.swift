@@ -83,21 +83,30 @@ struct HowToPlayView: View {
          "Tap ripe bunches before they wither. Leave the green ones and the gray, moldy ones: whatever lands in the "
             + "bins ends up in the wine. Gold bunches are perfect fruit. Swatting a wasp costs three seconds. Pick "
             + "about three bunches in four to bring in the whole crop."),
-        Topic("The crush pad", "drop.fill",
-         "Stainless steel keeps wine fresh and fruity, neutral oak rounds it out, and new French oak adds toast and "
-            + "grip. Saignée bleeds a fifth of a red's juice off as rosé, and the red left behind gets darker and "
-            + "richer."),
+        Topic("Doug's crush", "figure.walk",
+         "After each pick, walk Doug around the winery floor: drag the stick, or tap a machine to send him there, "
+            + "then press the big button. Reds: destem, bleed some pink juice off for saignée if you like, add the "
+            + "yeast after a cold soak, punch down the cap before it dries out, keep it 24–31 °C with the chiller, "
+            + "press, and barrel down. Rosé: crush into the press and press at pale salmon. Sybarite: whole-cluster "
+            + "press and stop before the bitter press juice, then chill, settle and add yeast. Every best moment moves "
+            + "with how ripe the fruit was: riper grapes color faster, ferment longer and run hotter. Or leave it to "
+            + "the cellar crew, who do a decent job."),
+        Topic("The cellar", "calendar.badge.clock",
+         "From November to July the wine ages: new oak builds, red tannins soften, and fruit blooms and fades. "
+            + "Top up the barrels every couple of months or air gets in. Doug blends and bottles at the lab bench "
+            + "whenever a wine tastes right: rosé and Sybarite young, the reds after some months in barrel. The lab "
+            + "shows what a month more would do. After July the vintage is released."),
         Topic("Blending", "flask.fill",
-         "Each wine has a style, shown as gold bands on the taste chart: get the dots inside them. Blends of "
+         "Each wine has Doug's range, the gold bands on the taste chart: get the dots inside them. Blends of "
             + "several grapes score a little higher. M5 needs all five: Syrah, Grenache, Mourvèdre, Counoise and "
             + "Cinsault. Sybarite and ÜBER Syrah need at least 75% of their grape."),
         Topic("The critic and the money", "star.fill",
          "The critic scores each wine and writes a note. Scores and reputation set the price. Wine you don't bottle "
             + "is sold off in bulk. Costs are paid when the vintage is released."),
-        Topic("Winter", "snowflake",
+        Topic("Between vintages", "leaf.fill",
          "Spend the profits on new vineyard blocks (you'll need three more for M5), more picking crews, a sorting "
-            + "table, a weather station, new French oak and a tasting room. Then chase five stars and a 100-point "
-            + "M5."),
+            + "table, a weather station, new French oak and a tasting room. It all starts with the 2001 vintage: "
+            + "chase five stars and a 100-point M5."),
     ]
 
     var body: some View {

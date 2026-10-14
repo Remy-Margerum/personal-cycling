@@ -16,7 +16,8 @@ public enum WineID: String, Codable, CaseIterable, Sendable, Identifiable {
     }
 }
 
-/// What a wine has to be, and the style the critic expects of it.
+/// What a wine has to be, and Doug's range for it: the style he makes it in,
+/// which is what the critic rewards.
 public struct WineSpec: Sendable {
     enum Rule: Sendable {
         /// At least this share of one grape (75% is the legal minimum for
@@ -37,7 +38,7 @@ public struct WineSpec: Sendable {
     /// Shelf price per bottle for a 90-point wine.
     public let price: Double
     public let blurb: String
-    /// The style the critic is looking for.
+    /// Doug's range: where each dimension of the taste should land.
     public let target: [TasteProfile.Dimension: ClosedRange<Double>]
     let rule: Rule
 
@@ -184,6 +185,8 @@ public struct BottledWine: Codable, Equatable, Identifiable, Sendable {
     public var composition: [VarietalShare]
     /// What it sold for, once the vintage is released.
     public var revenue: Double?
+    /// The cellar month it was bottled (see `Aging.months`).
+    public var month: Int?
 
     public var spec: WineSpec { wine.spec }
     public var verdict: String { Self.verdict(score) }
@@ -248,7 +251,14 @@ enum TastingNote {
         }
 
         if faults.contains(.moldy) { sentences.append("A musty note distracts.") }
-        if faults.contains(.green) { sentences.append("Some green, stemmy edges.") }
+        if faults.contains(.green) { sentences.append("Some green, unripe edges.") }
+        if faults.contains(.stemmy) { sentences.append("Bitter, leafy and stemmy on the finish.") }
+        if faults.contains(.sour) || faults.contains(.volatile) {
+            sentences.append("A whiff of vinegar spoils it.")
+        }
+        if faults.contains(.bitter) { sentences.append("A bitter, phenolic bite from the press.") }
+        if faults.contains(.sweet) { sentences.append("A touch of sugar left behind: the fermentation stuck.") }
+        if faults.contains(.oxidized) { sentences.append("Tired, nutty and a little brown.") }
         if analysis.alcohol > 15.5 { sentences.append("The alcohol runs hot on the finish.") }
 
         switch score {
