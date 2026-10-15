@@ -234,8 +234,10 @@ External testing needs a few things only you can fill in, once: App Store
 Connect → the app → TestFlight → **Test Information** → Feedback Email and
 the Beta App Review contact (name, phone, email). Until they're there, the
 run says so in its summary and leaves the build unsubmitted; run it again
-afterwards (with or without emails) to submit. The repo is public, so the
-emails are masked in the run's log. The same workflow works for Raggio.
+afterwards with the same emails to submit (people already in the group are
+left as they are; a run with no emails only reports). It does the same for
+a newer build. The repo is public, so the emails are masked in the run's
+log. The same workflow works for Raggio.
 
 With a Mac and Xcode 26 instead: `brew install xcodegen`, run `xcodegen`
 in `MargerumCrush/`, open `MargerumCrush.xcodeproj`, pick your team under
