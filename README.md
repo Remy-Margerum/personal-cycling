@@ -37,6 +37,7 @@ TestFlight workflow, and the cycling app doesn't depend on any of it.
     ci.yml                   every push: package tests + unsigned archives of both apps
     testflight.yml           push to main: signed archive → TestFlight
     testflight-crush.yml     push to main touching MargerumCrush/: the game → TestFlight
+    testflight-testers.yml   by hand: invite TestFlight testers by email (either app)
   RideKit/                   Swift package, no iOS dependencies, unit-tested
     CyclingPowerMeasurement  parses 0x2A63 packets (power, balance, crank data)
     CadenceCalculator        crank revs → rpm, with counter wrap and coasting

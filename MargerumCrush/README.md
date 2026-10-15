@@ -224,6 +224,19 @@ After that, every push to `main` that touches `MargerumCrush/` uploads a
 new build. Until the secret exists, the workflow finishes early with a
 notice instead of failing.
 
+**Inviting testers.** GitHub → Actions → **TestFlight testers** → **Run
+workflow**: app `crush`, the emails (commas or spaces). It adds them to the
+external TestFlight group **Friends & Family** (made the first time), puts
+the newest build in it, fills in the beta description and What to Test, and
+submits the build for TestFlight App Review. Apple emails each tester once
+the build is approved (the first build of a version usually within a day).
+External testing needs a few things only you can fill in, once: App Store
+Connect → the app → TestFlight → **Test Information** → Feedback Email and
+the Beta App Review contact (name, phone, email). Until they're there, the
+run says so in its summary and leaves the build unsubmitted; run it again
+afterwards (with or without emails) to submit. The repo is public, so the
+emails are masked in the run's log. The same workflow works for Raggio.
+
 With a Mac and Xcode 26 instead: `brew install xcodegen`, run `xcodegen`
 in `MargerumCrush/`, open `MargerumCrush.xcodeproj`, pick your team under
 **Signing & Capabilities** and run it on the phone or the simulator.

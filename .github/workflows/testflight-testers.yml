@@ -1,0 +1,76 @@
+# Invites TestFlight testers by email through the App Store Connect API,
+# with the API key the TestFlight workflows upload with (ASC_KEY_ID,
+# ASC_ISSUER_ID, ASC_KEY_P8; its role must be App Manager or Admin).
+# Actions → TestFlight testers → Run workflow: pick the app, paste the emails.
+# The script puts them in an external TestFlight group with the newest build,
+# fills in the test information it can, and submits the build for TestFlight
+# App Review when Apple has everything; Apple emails each tester once the
+# build is approved. What it did, and anything left for you, is in the run's
+# summary. Run with no emails it only reports.
+#
+# The repo is public, so the emails never go through env or a command line
+# (both are printed in the log): the script reads them from the event
+# payload and masks them. A push to a work branch that changes this tool runs
+# it report-only.
+name: TestFlight testers
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: App
+        type: choice
+        options: [crush, raggio]
+        default: crush
+      emails:
+        description: Tester emails, separated by commas or spaces (masked in the log)
+        required: false
+        default: ""
+      group:
+        description: External TestFlight group (made if it doesn't exist)
+        required: false
+        default: Friends & Family
+  push:
+    branches: ["claude/**"]
+    paths:
+      - ".github/workflows/testflight-testers.yml"
+      - ".github/scripts/testflight-testers.py"
+
+concurrency:
+  group: testflight-testers
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  testers:
+    name: Invite testers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check secrets
+        id: secrets
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          missing=()
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing secrets: ${missing[*]} (PLAN.md, Phase 3)"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v5
+
+      - name: Invite
+        env:
+          APP: ${{ inputs.app || 'crush' }}
+          GROUP: ${{ inputs.group || 'Friends & Family' }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: python3 .github/scripts/testflight-testers.py --app "$APP" --group "$GROUP" --from-event
