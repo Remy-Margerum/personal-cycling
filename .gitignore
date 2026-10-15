@@ -13,3 +13,4 @@ Config/Signing.local.xcconfig
 MargerumCrush/App/Info.plist
 MargerumCrush/CrushKit/.build/
 MargerumCrush/Config/Signing.local.xcconfig
+__pycache__/
