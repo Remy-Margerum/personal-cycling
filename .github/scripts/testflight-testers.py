@@ -443,7 +443,8 @@ def main():
         asc = Asc(os.environ["ASC_KEY_ID"], os.environ["ASC_ISSUER_ID"], os.environ["ASC_KEY_P8"])
         app_record = find_app(asc, app["bundle"])
         app_id = app_record["id"]
-        say(f"App: {app_record['attributes'].get('name')} ({app['bundle']})")
+        app_name = app_record["attributes"].get("name") or app["name"]
+        say(f"App: {app_name} ({app['bundle']})")
 
         group = find_group(asc, app_id, args.group, create=write)
         if group is None:
@@ -497,10 +498,11 @@ def main():
         if state == "READY_FOR_BETA_SUBMISSION":
             if needed:
                 annotate("warning", f"Build {build['label']} can't go to TestFlight App Review yet: Apple needs "
-                         + "; ".join(needed) + ". Add them in App Store Connect → Apps → " + app["name"]
+                         + "; ".join(needed) + ". Add them in App Store Connect → Apps → " + app_name
                          + " → TestFlight → Test Information, then run this workflow again (or press "
-                         "Submit for Review on the build in the group). The testers are in the group "
-                         "already; Apple emails them once the build is approved.")
+                         "Submit for Review on the build in the group)."
+                         + (" The testers are in the group already; Apple emails them once the build is "
+                            "approved." if write else ""))
             elif write:
                 status, payload = asc.call("POST", "/v1/betaAppReviewSubmissions", {"data": {
                     "type": "betaAppReviewSubmissions",

@@ -282,6 +282,8 @@ def main():
     check("report-only run says so", "only reports" in out, out)
     check("report-only run follows links.next through every group", "Old Friends (external)" in out, out)
     check("report-only run names the processed build", "0.1 (4)" in out, out)
+    check("report-only run doesn't claim testers were added", "in the group already" not in out, out)
+    check("names the app as App Store Connect does", "Apps → Margerum → TestFlight" in out, out)
 
     # 2. Two testers (one new, one already on the team; one repeated and in
     #    another case), a key pasted with Windows line endings.
