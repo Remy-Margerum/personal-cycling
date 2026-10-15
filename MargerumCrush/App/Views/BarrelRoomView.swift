@@ -357,7 +357,7 @@ struct BlendingBench: View {
                 if let game = store.game {
                     VStack(spacing: 14) {
                         SectionTitle("Make the wines", detail: Aging.name(game.cellarMonth))
-                        ForEach(WineID.allCases) { wine in
+                        ForEach(game.winesToShow) { wine in
                             WineRow(game: game, wine: wine)
                         }
                         if !game.bottled.isEmpty {

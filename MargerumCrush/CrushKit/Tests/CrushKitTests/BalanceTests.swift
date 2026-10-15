@@ -54,26 +54,23 @@ struct Bot {
 
         // The cellar, a month at a time, until the release in August.
         while game.phase == .cellar {
-            for wine in WineID.allCases where !game.hasBottled(wine) && game.blocker(for: wine) == nil {
+            for wine in WineID.blends where !game.hasBottled(wine) && game.blocker(for: wine) == nil {
                 let blend = recipe(for: wine, game)
                 guard !blend.cases.isEmpty else { continue }
-                switch bottling {
-                case .month(let month):
-                    if game.cellarMonth >= min(month, Aging.last) { game.bottle(blend) }
-                case .best:
-                    let now = game.analyze(blend).score
-                    let later = stride(from: 1, through: game.monthsLeft, by: 1)
-                        .map { game.analyze(blend, monthsAhead: $0).score }.max() ?? 0
-                    if now >= later { game.bottle(blend) }
-                }
+                bottleWhenDue(blend, &game)
             }
             if game.cellarMonth % topping == 0 {
                 game.topUp(.neutralOak)
                 game.topUp(.newOak)
             }
-            // The bots don't keep wine for another year: what's left goes for bulk.
-            if game.cellarMonth == Aging.last {
-                for lot in game.lots { game.sellInBulk(lot.id) }
+            // What the blends leave becomes single varietals, once M5 and ÜBER
+            // are bottled or can't be made. Nothing is kept another year.
+            if [WineID.m5, .uber].allSatisfy({ game.hasBottled($0) || game.blocker(for: $0) != nil }) {
+                for wine in WineID.singles where !game.hasBottled(wine) {
+                    let blend = recipe(for: wine, game)
+                    guard !blend.cases.isEmpty else { continue }
+                    bottleWhenDue(blend, &game)
+                }
             }
             game.nextMonth()
         }
@@ -81,6 +78,18 @@ struct Bot {
 
         for upgrade in Self.wishlist { game.buy(upgrade) }
         game.startNextVintage()
+    }
+
+    private func bottleWhenDue(_ blend: Blend, _ game: inout Game) {
+        switch bottling {
+        case .month(let month):
+            if game.cellarMonth >= min(month, Aging.last) { game.bottle(blend) }
+        case .best:
+            let now = game.analyze(blend).score
+            let later = stride(from: 1, through: game.monthsLeft, by: 1)
+                .map { game.analyze(blend, monthsAhead: $0).score }.max() ?? 0
+            if now >= later { game.bottle(blend) }
+        }
     }
 
     private func shouldPick(_ block: VineyardBlock, _ game: Game) -> Bool {
@@ -125,6 +134,10 @@ struct Bot {
                 if uber.cases.isEmpty || game.analyze(bigger).score >= game.analyze(uber).score { uber = bigger }
             }
             return uber
+        case .grenache, .syrah, .mourvedre, .counoise, .cinsault:
+            // All of the grape's red wine from this harvest.
+            let grape = available.filter { $0.varietal == wine.grape && $0.vintage == game.vintage }
+            return Blend(wine: wine, cases: Dictionary(uniqueKeysWithValues: grape.map { ($0.id, $0.cases) }))
         }
     }
 }
@@ -174,6 +187,11 @@ final class BalanceTests: XCTestCase {
         return averages
     }
 
+    /// Every single varietal's score, pooled.
+    private func singles(_ result: Result) -> [Int] {
+        WineID.singles.flatMap { result.scores[$0] ?? [] }
+    }
+
     func testCasualPlayersMakeGoodWineAndMoney() {
         let result = simulate(.casual)
         let average = averages("Casual", result)
@@ -184,15 +202,26 @@ final class BalanceTests: XCTestCase {
         XCTAssertTrue((85...91).contains(average[.rose] ?? 0))
         XCTAssertTrue((91...97).contains(average[.m5] ?? 0))
         XCTAssertTrue((83...90).contains(average[.uber] ?? 0))
+        // The leftovers make single varietals, about as good as the M5.
+        let single = singles(result)
+        print("Casual single varietals: \(single.count) wines, average \(oneDecimal(self.average(single)))")
+        XCTAssertGreaterThan(single.count, 100)
+        XCTAssertGreaterThan(self.average(single), (average[.m5] ?? 0) - 1.5)
     }
 
     func testExpertsDoBetterButHundredsStayRare() {
-        let casual = averages("Casual", simulate(.casual))
+        let casualResult = simulate(.casual)
+        let casual = averages("Casual", casualResult)
         let result = simulate(.expert)
         let expert = averages("Expert", result)
-        for wine in WineID.allCases {
+        for wine in WineID.blends {
             XCTAssertGreaterThan(expert[wine] ?? 0, (casual[wine] ?? 0) + 0.3, wine.spec.name)
         }
+        // An expert's single varietals score with (or above) its M5.
+        let single = average(singles(result))
+        print("Expert single varietals: \(singles(result).count) wines, average \(oneDecimal(single))")
+        XCTAssertGreaterThan(single, average(singles(casualResult)) + 0.3)
+        XCTAssertGreaterThanOrEqual(single, (expert[.m5] ?? 0) - 0.5)
         let all = result.scores.values.flatMap { $0 }
         XCTAssertLessThan(all.filter { $0 == 100 }.count, all.count / 10)
         // Experts give ÜBER its months in new oak, and bottle the white young.

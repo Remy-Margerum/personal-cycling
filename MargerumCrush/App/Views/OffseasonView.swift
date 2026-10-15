@@ -47,7 +47,7 @@ struct ReportCard: View {
             Text("The \(String(report.vintage)) vintage")
                 .font(.title3.weight(.bold))
                 .fontDesign(.serif)
-            if report.wines.isEmpty && report.bulkCases == 0 {
+            if report.wines.isEmpty {
                 Text("No wine this year.").foregroundStyle(.secondary)
             }
             ForEach(report.wines) { wine in
@@ -67,9 +67,6 @@ struct ReportCard: View {
                     }
                 }
                 .buttonStyle(.plain)
-            }
-            if report.bulkCases > 0 {
-                line("Bulk wine, \(report.bulkCases) cases", report.bulkSales)
             }
             Divider()
             line("Grapes", -report.bill.grapes)

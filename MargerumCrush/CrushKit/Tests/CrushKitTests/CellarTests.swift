@@ -227,6 +227,28 @@ final class BlendTests: XCTestCase {
         XCTAssertTrue(note.contains("stemmy"), note)
     }
 
+    func testSingleVarietalsScoreWithTheBlends() throws {
+        let m5 = WineSpec.m5.analyze(Varietal.allCases.filter(\.isRed).map { (lot(harvest($0)), 50) })
+        for wine in WineID.singles {
+            let grape = try XCTUnwrap(wine.grape)
+            XCTAssertEqual(WineID.single(grape), wine)
+            let analysis = wine.spec.analyze([(lot(harvest(grape)), 100)])
+            XCTAssertTrue(analysis.canBottle, "\(wine.spec.name): \(analysis.problems)")
+            XCTAssertGreaterThanOrEqual(analysis.score, 95, "\(wine.spec.name): \(analysis.misses)")
+            XCTAssertGreaterThanOrEqual(analysis.score, m5.score - 1, wine.spec.name)
+        }
+        // The purer, the better; under 75% it can't carry the grape's name.
+        let grenache = lot(harvest(.grenache))
+        let syrah = lot(harvest(.syrah))
+        let scores = [100, 80, 75].map { WineSpec.grenache.analyze([(grenache, $0), (syrah, 100 - $0)]).score }
+        XCTAssertEqual(scores, [96, 95, 94])
+        let short = WineSpec.grenache.analyze([(grenache, 70), (syrah, 30)])
+        XCTAssertFalse(short.canBottle)
+        XCTAssertEqual(short.problems, ["Needs at least 75% Grenache. Now 70%."])
+        XCTAssertNil(WineID.single(.sauvignonBlanc))
+        XCTAssertNil(WineID.m5.grape)
+    }
+
     func testOverripeWineRunsHot() {
         let raisins = lot(harvest(.syrah, brix: 28.5), .newOak)
         let analysis = WineSpec.uber.analyze([(raisins, 100)])

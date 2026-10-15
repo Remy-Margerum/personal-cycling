@@ -8,7 +8,6 @@ struct CellarSection: View {
     let game: Game
     @State private var confirmRelease = false
     @State private var showCellar = false
-    @State private var selling: Lot?
 
     var body: some View {
         VStack(spacing: 14) {
@@ -42,7 +41,7 @@ struct CellarSection: View {
             .card()
 
             SectionTitle("The wines", detail: "Blended at the lab bench")
-            ForEach(WineID.allCases) { wine in
+            ForEach(game.winesToShow) { wine in
                 WineRow(game: game, wine: wine, link: false)
             }
             if !game.bottled.isEmpty {
@@ -59,7 +58,7 @@ struct CellarSection: View {
                     .card()
             }
             ForEach(game.lots) { lot in
-                LotRow(lot: lot, vintage: game.vintage) { selling = lot }
+                LotRow(lot: lot, vintage: game.vintage)
             }
 
             BillCard(bill: game.bill)
@@ -79,22 +78,14 @@ struct CellarSection: View {
             if young > 0 {
                 Button("Release, and keep \(young) cases in barrel") { store.play { $0.release() } }
             }
-            Button("Release, and sell the rest in bulk") {
+            Button("Release, and bottle the rest as single varietals") {
                 store.play { game in
-                    for lot in game.lots { game.sellInBulk(lot.id) }
+                    game.bottleLeftovers()
                     game.release()
                 }
             }
         } message: {
             Text(releaseMessage)
-        }
-        .confirmationDialog("Sell it in bulk?", isPresented: Binding(get: { selling != nil }, set: { if !$0 { selling = nil } }),
-                            titleVisibility: .visible, presenting: selling) { lot in
-            Button("Sell \(lot.cases) cases for \(Format.money(Double(lot.cases) * Game.bulkPricePerCase))", role: .destructive) {
-                store.play { $0.sellInBulk(lot.id) }
-            }
-        } message: { lot in
-            Text("\(lot.name) goes to another winery as bulk wine, paid at the release.")
         }
     }
 
@@ -108,11 +99,12 @@ struct CellarSection: View {
         var text = ""
         if young > 0 {
             text += "\(young) cases of \(String(game.vintage)) haven't been bottled. They can stay in barrel for another "
-                + "year (\(Format.money(Game.cellarCostPerCase)) a case), or be sold off in bulk for "
-                + "\(Format.money(Game.bulkPricePerCase)) a case."
+                + "year (\(Format.money(Game.cellarCostPerCase)) a case), or the crew can bottle them now: each red grape "
+                + "as its own single varietal, the white as Sybarite and the rosé as rosé."
         }
         if old > 0 {
-            text += (text.isEmpty ? "" : " ") + "\(old) cases of last year's wine have had their extra year: they go for bulk."
+            text += (text.isEmpty ? "" : " ") + "\(old) cases of last year's wine have had their extra year: the crew "
+                + "bottles them as single varietals at the release."
         }
         return text
     }
@@ -202,8 +194,6 @@ struct LotRow: View {
     let lot: Lot
     /// This year's vintage: older lots say which harvest they're from.
     var vintage: Int?
-    /// Offers to sell the lot off in bulk.
-    var sell: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -221,16 +211,6 @@ struct LotRow: View {
             }
             Spacer()
             Text("\(lot.cases) cases").font(.subheadline.monospacedDigit())
-            if let sell {
-                Menu {
-                    Button("Sell in bulk", systemImage: "dollarsign.circle", action: sell)
-                } label: {
-                    Image(systemName: "ellipsis.circle").font(.title3)
-                }
-                .tint(Theme.ink)
-                .accessibilityLabel("Sell in bulk")
-                .accessibilityValue(lot.name)
-            }
         }
         .card()
     }

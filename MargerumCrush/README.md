@@ -77,12 +77,18 @@ made up for the game.
    color and 85% from one vintage (the year on the label). Sybarite and ÜBER
    need 75% of their grape, M5 needs all five (Syrah, Grenache, Mourvèdre,
    Counoise, Cinsault), and more grapes in a blend score a little higher.
+   What the blends leave makes **single varietals**: a Grenache, Syrah,
+   Mourvèdre, Counoise or Cinsault of at least 75% of its grape, judged
+   against Doug's range for that grape, with up to 3 points for purity, so
+   a pure one rates with the M5.
 6. **Release** in August. The critic scores each wine (±1 for mood) with a
    tasting note. Scores and reputation set prices, and the season's costs
    are paid. Unbottled wine stays in barrel for another year ($6 a case),
-   aging on (reds soften, whites and rosé fade), unless you sell a lot off
-   in bulk; wine that's had its extra year goes for bulk at the next
-   release.
+   aging on (reds soften, whites and rosé fade). Nothing goes for bulk:
+   wine still in barrel after its extra year is bottled by the crew at the
+   next release, each red grape as its single varietal, the white as
+   Sybarite and the rosé as rosé (the release can do the same with this
+   year's leftovers).
 7. **Winter.** Lease the Cinsault, Counoise and Mourvèdre blocks (needed for
    M5) and a cool-climate Syrah block; hire more crews; buy a sorting table
    (pulls out rot, leaves and canes), a weather station, new French oak and

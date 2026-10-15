@@ -85,8 +85,8 @@ final class TourTests: XCTestCase {
         tap(app.buttons["Leave the cellar"])
 
         tap(button(startingWith: "Release the"))
-        let bulk = app.buttons["Release, and sell the rest in bulk"]
-        if bulk.waitForExistence(timeout: 5) { bulk.tap() }
+        let rest = app.buttons["Release, and bottle the rest as single varietals"]
+        if rest.waitForExistence(timeout: 5) { rest.tap() }
         scrollToTop()
         snap("17 The vintage report")
         app.swipeUp()
